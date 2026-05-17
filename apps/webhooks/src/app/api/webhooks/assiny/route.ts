@@ -88,7 +88,7 @@ export async function POST(req: Request) {
       payload: {
         gateway: "assiny",
         errors: parsed.error.flatten(),
-        body_preview: rawBody.slice(0, 500),
+        body_full: rawBody.slice(0, 4000),
       },
     });
     return NextResponse.json({ ok: true, ignored: "invalid_payload" });
