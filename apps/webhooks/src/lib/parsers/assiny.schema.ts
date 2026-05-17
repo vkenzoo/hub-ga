@@ -14,7 +14,8 @@ import { z } from "zod";
 
 const assinyCustomerSchema = z
   .object({
-    email: z.string().email(),
+    // Email pode vir vazio em eventos de teste — validamos no handler.
+    email: z.string().optional(),
     full_name: z.string().optional(),
     first_name: z.string().optional(),
     last_name: z.string().optional(),
@@ -95,7 +96,7 @@ export const assinyEventSchema = z
         status: z.string().optional(),
         amount: z.union([z.string(), z.number()]).optional(),
         amount_with_tax: z.union([z.string(), z.number()]).optional(),
-        customer: assinyCustomerSchema,
+        customer: assinyCustomerSchema.optional(),
         offer: assinyOfferSchema.optional(),
         product: assinyProductSchema.optional(),
         subscription: assinySubscriptionSchema.optional(),

@@ -57,7 +57,7 @@ function mapPurchaseStatus(kind: EventKind): PurchaseStatus {
   return "paid";
 }
 
-function customerName(c: AssinyEvent["data"]["customer"]): string | undefined {
+function customerName(c: NonNullable<AssinyEvent["data"]["customer"]>): string | undefined {
   if (c.full_name) return c.full_name;
   if (c.first_name && c.last_name) return `${c.first_name} ${c.last_name}`;
   return c.first_name ?? c.last_name;
@@ -111,6 +111,15 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
     });
   }
 
+  // Test events do Assiny podem vir sem customer real
+  if (!d.customer?.email) {
+    await logEvent(hub, "webhook.test_event_no_customer", {
+      level: "info",
+      payload: { gateway: "assiny", event: event.event },
+    });
+    return { skipped: true as const, reason: "test_event_no_customer" };
+  }
+
   // Resolve product gateway_id — Assiny tem dois IDs (product + offer).
   // Tentamos product.id primeiro (catálogo), depois offer.id (variante de preço).
   const productGwId = d.product?.id ?? d.offer?.id;
@@ -131,7 +140,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
     gatewayEventId,
     gatewayProductId: productGwId,
     customer: {
-      email: d.customer.email,
+      email: d.customer.email!,
       name: customerName(d.customer),
       phone: d.customer.phone,
     },
