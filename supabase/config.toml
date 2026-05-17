@@ -1,0 +1,5 @@
+# Configuração do Supabase CLI. project_id é definido por `supabase link`.
+project_id = "hub"
+
+[db]
+major_version = 17

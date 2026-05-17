@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "webhooks",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@hub/webhooks", "dev"],
+      "port": 3001,
+      "autoPort": true
+    },
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@hub/dashboard", "dev"],
+      "port": 3002,
+      "autoPort": true
+    }
+  ]
+}
