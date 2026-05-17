@@ -1,5 +1,7 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+
+type CookieItem = { name: string; value: string; options?: CookieOptions };
 
 const url = process.env.HUB_SUPABASE_URL!;
 const anon = process.env.HUB_SUPABASE_ANON_KEY!;
@@ -16,7 +18,7 @@ export async function updateSession(req: NextRequest) {
       getAll() {
         return req.cookies.getAll();
       },
-      setAll(items) {
+      setAll(items: CookieItem[]) {
         for (const { name, value } of items) req.cookies.set(name, value);
         res = NextResponse.next({ request: { headers: reqHeaders } });
         for (const { name, value, options } of items) res.cookies.set(name, value, options);
