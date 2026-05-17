@@ -1,5 +1,25 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "HUB_SUPABASE_URL",
+    "HUB_SUPABASE_ANON_KEY",
+    "HUB_SUPABASE_SERVICE_ROLE_KEY",
+    "HUB_PUBLIC_API_KEY",
+    "SCALO_SUPABASE_URL",
+    "SCALO_SERVICE_ROLE_KEY",
+    "GA_SALES_SUPABASE_URL",
+    "GA_SALES_SERVICE_ROLE_KEY",
+    "BLACKBELT_SUPABASE_URL",
+    "BLACKBELT_SERVICE_ROLE_KEY",
+    "DEFAULT_PROVISION_PASSWORD",
+    "ASSINY_WEBHOOK_SECRET",
+    "HOTMART_WEBHOOK_SECRET",
+    "RESEND_API_KEY",
+    "RESEND_FROM",
+    "CRON_SECRET",
+    "PUBLIC_API_SHARED_SECRET",
+    "NEXT_TELEMETRY_DISABLED"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

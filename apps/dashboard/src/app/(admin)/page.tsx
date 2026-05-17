@@ -34,7 +34,7 @@ async function getOverview() {
   return {
     stats: Object.fromEntries(counts) as Record<string, number>,
     events: (latestEvents ?? []) as EventRow[],
-    purchases: (latestPurchases ?? []) as Array<{
+    purchases: (latestPurchases ?? []) as unknown as Array<{
       id: string;
       amount: number;
       gateway: string;
