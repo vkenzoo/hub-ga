@@ -9,17 +9,53 @@ interface EventRow {
   created_at: string;
 }
 
-async function getOverview() {
-  const sb = createSupabaseAdmin();
+type Period = "today" | "7d" | "30d" | "month" | "all";
 
-  // Início do dia em America/Sao_Paulo. Como o servidor pode estar em UTC,
-  // calculamos a partir do offset atual (-03:00 sem horário de verão).
-  const now = new Date();
-  const saoPauloOffsetMin = 180; // 3h em minutos
-  const localMs = now.getTime() - saoPauloOffsetMin * 60_000;
-  const local = new Date(localMs);
-  local.setUTCHours(0, 0, 0, 0);
-  const startOfDayISO = new Date(local.getTime() + saoPauloOffsetMin * 60_000).toISOString();
+const PERIOD_LABEL: Record<Period, string> = {
+  today: "Hoje",
+  "7d": "Últimos 7 dias",
+  "30d": "Últimos 30 dias",
+  month: "Este mês",
+  all: "Todo período",
+};
+
+/**
+ * Início do range em America/Sao_Paulo (UTC-3) pra um período dado.
+ * Retorna null pra "all" (sem filtro).
+ */
+function periodStart(p: Period): Date | null {
+  const offsetMin = 180; // BRT = UTC-3
+  const nowLocalMs = Date.now() - offsetMin * 60_000;
+  const local = new Date(nowLocalMs);
+  local.setUTCHours(0, 0, 0, 0); // meia-noite "local"
+
+  if (p === "today") {
+    return new Date(local.getTime() + offsetMin * 60_000);
+  }
+  if (p === "7d") {
+    local.setUTCDate(local.getUTCDate() - 6);
+    return new Date(local.getTime() + offsetMin * 60_000);
+  }
+  if (p === "30d") {
+    local.setUTCDate(local.getUTCDate() - 29);
+    return new Date(local.getTime() + offsetMin * 60_000);
+  }
+  if (p === "month") {
+    local.setUTCDate(1);
+    return new Date(local.getTime() + offsetMin * 60_000);
+  }
+  return null;
+}
+
+function parsePeriod(raw: string | undefined): Period {
+  if (raw === "7d" || raw === "30d" || raw === "month" || raw === "all") return raw;
+  return "today";
+}
+
+async function getOverview(period: Period) {
+  const sb = createSupabaseAdmin();
+  const start = periodStart(period);
+  const startISO = start?.toISOString();
 
   // Stats de domínio (contagens)
   const [
@@ -36,8 +72,7 @@ async function getOverview() {
     sb.from("access_grants").select("*", { count: "exact", head: true }),
   ]);
 
-  // Métricas financeiras: puxa só amount/cycle/created_at de todas as pagas
-  // e agrega em JS. Por ora é leve; quando passar de ~50k linhas migra pra rpc.
+  // Todas as compras pagas — pra calcular o acumulado lifetime
   const { data: paidRows } = await sb
     .from("purchases")
     .select("amount, subscription_cycle, created_at")
@@ -50,14 +85,27 @@ async function getOverview() {
     created_at: string;
   }>;
 
+  // Filtro por período em JS sobre os mesmos dados
+  const inPeriod = startISO
+    ? paid.filter((p) => p.created_at >= startISO)
+    : paid;
+
   const totalRevenue = paid.reduce((s, p) => s + Number(p.amount), 0);
-  const todayRevenue = paid
-    .filter((p) => p.created_at >= startOfDayISO)
-    .reduce((s, p) => s + Number(p.amount), 0);
-  const renewalRevenue = paid
+  const periodRevenue = inPeriod.reduce((s, p) => s + Number(p.amount), 0);
+  const periodRenewalRevenue = inPeriod
     .filter((p) => (p.subscription_cycle ?? 1) > 1)
     .reduce((s, p) => s + Number(p.amount), 0);
-  const totalSalesCount = paid.length;
+  const periodSalesCount = inPeriod.length;
+
+  // Novos alunos no período = customers com first_seen_at dentro do range
+  let newStudents = customersCount ?? 0;
+  if (startISO) {
+    const { count } = await sb
+      .from("customers")
+      .select("*", { count: "exact", head: true })
+      .gte("first_seen_at", startISO);
+    newStudents = count ?? 0;
+  }
 
   const { data: latestEvents } = await sb
     .from("events_log")
@@ -80,11 +128,11 @@ async function getOverview() {
       grants: grantsCount ?? 0,
     },
     metrics: {
-      todayRevenue,
-      renewalRevenue,
+      periodRevenue,
+      periodRenewalRevenue,
       totalRevenue,
-      newStudents: customersCount ?? 0,
-      totalSales: totalSalesCount,
+      newStudents,
+      periodSales: periodSalesCount,
     },
     events: (latestEvents ?? []) as EventRow[],
     purchases: (latestPurchases ?? []) as unknown as Array<{
@@ -116,8 +164,17 @@ function statusChip(status: string) {
   return { dot: "bg-text2", label: status };
 }
 
-export default async function Page() {
-  const { counts, metrics, events, purchases } = await getOverview();
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const sp = await searchParams;
+  const period = parsePeriod(sp.period);
+  const { counts, metrics, events, purchases } = await getOverview(period);
+  const periodLabel = PERIOD_LABEL[period];
+
+  const periods: Period[] = ["today", "7d", "30d", "month", "all"];
 
   return (
     <>
@@ -132,33 +189,47 @@ export default async function Page() {
       />
 
       <PageBody>
+        {/* Filtro de período */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="label">Período:</span>
+          {periods.map((p) => (
+            <Link
+              key={p}
+              href={p === "today" ? "/" : `/?period=${p}`}
+              className={`btn btn-sm ${period === p ? "btn-primary" : "btn-ghost"}`}
+            >
+              {PERIOD_LABEL[p]}
+            </Link>
+          ))}
+        </div>
+
         {/* Métricas-chave */}
         <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard
-            label="Receita D+0"
-            value={fmtMoney(metrics.todayRevenue)}
+            label="Receita no período"
+            value={fmtMoney(metrics.periodRevenue)}
             tone="accent"
-            hint="Vendas pagas hoje"
+            hint={periodLabel}
           />
           <StatCard
             label="Receita de renovações"
-            value={fmtMoney(metrics.renewalRevenue)}
-            hint="Assinaturas reabertas (ciclo > 1)"
+            value={fmtMoney(metrics.periodRenewalRevenue)}
+            hint={`${periodLabel} · ciclo > 1`}
           />
           <StatCard
-            label="Receita total"
+            label="Receita acumulada"
             value={fmtMoney(metrics.totalRevenue)}
-            hint="Histórico de vendas pagas"
+            hint="Histórico completo"
           />
           <StatCard
             label="Novos alunos"
             value={metrics.newStudents}
-            hint="Clientes únicos no hub"
+            hint={period === "all" ? "Total de clientes únicos" : `Cadastrados ${periodLabel.toLowerCase()}`}
           />
           <StatCard
-            label="Vendas totais"
-            value={metrics.totalSales}
-            hint="Compras pagas (qualquer ciclo)"
+            label="Vendas no período"
+            value={metrics.periodSales}
+            hint={periodLabel}
           />
         </section>
 
