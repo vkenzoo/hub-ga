@@ -135,7 +135,7 @@ export default async function Page({
 
         <div className="card overflow-hidden">
           <header className="px-4 py-3 border-b border-line flex items-center justify-between">
-            <h2 className="text-sm font-medium">{total} execução{total === 1 ? "" : "es"}</h2>
+            <h2 className="text-sm font-medium">{total} {total === 1 ? "execução" : "execuções"}</h2>
             <span className="text-2xs text-muted uppercase tracking-wider">Últimas 200</span>
           </header>
 
