@@ -37,17 +37,36 @@ const I = {
   subs: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
   ),
+  team: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-3-3.87"/><path d="M4 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><circle cx="10" cy="7" r="4"/></svg>
+  ),
 };
 
-const ITEMS: Item[] = [
-  { href: "/", label: "Resumo", icon: I.resumo },
-  { href: "/sales", label: "Vendas", icon: I.sales },
-  { href: "/subscriptions", label: "Assinaturas", icon: I.subs },
-  { href: "/customers", label: "Clientes", icon: I.customers },
-  { href: "/systems", label: "Sistemas", icon: I.systems },
-  { href: "/products", label: "Produtos", icon: I.products },
-  { href: "/webhooks", label: "Webhooks", icon: I.webhooks },
-  { href: "/executions", label: "Executions", icon: I.executions },
+type Section =
+  | "home"
+  | "sales"
+  | "subscriptions"
+  | "customers"
+  | "systems"
+  | "products"
+  | "webhooks"
+  | "executions";
+
+interface ItemWithRole extends Item {
+  section?: Section;
+  superAdminOnly?: boolean;
+}
+
+const ITEMS: ItemWithRole[] = [
+  { href: "/", label: "Resumo", icon: I.resumo, section: "home" },
+  { href: "/sales", label: "Vendas", icon: I.sales, section: "sales" },
+  { href: "/subscriptions", label: "Assinaturas", icon: I.subs, section: "subscriptions" },
+  { href: "/customers", label: "Clientes", icon: I.customers, section: "customers" },
+  { href: "/systems", label: "Sistemas", icon: I.systems, section: "systems" },
+  { href: "/products", label: "Produtos", icon: I.products, section: "products" },
+  { href: "/webhooks", label: "Webhooks", icon: I.webhooks, section: "webhooks" },
+  { href: "/executions", label: "Executions", icon: I.executions, section: "executions" },
+  { href: "/team", label: "Equipe", icon: I.team, superAdminOnly: true },
 ];
 
 function isActiveLink(href: string, pathname: string): boolean {
@@ -59,15 +78,26 @@ export function Sidebar({
   email,
   name,
   avatarUrl,
+  role,
+  allowedSections,
 }: {
   email: string;
   name?: string | null;
   avatarUrl?: string | null;
+  role?: "admin" | "member";
+  allowedSections?: Section[] | null;
 }) {
   const pathname = usePathname() ?? "/";
   const displayName = name?.trim() || email.split("@")[0] || email;
   const isProfileActive = pathname === "/profile";
   const [mobileOpen, setMobileOpen] = useState(false);
+  const visibleItems = ITEMS.filter((it) => {
+    if (it.superAdminOnly) return role === "admin";
+    if (role === "admin") return true;
+    if (!it.section) return true;
+    if (!allowedSections) return true; // null = todas
+    return allowedSections.includes(it.section);
+  });
 
   // Fecha o drawer ao mudar de rota
   useEffect(() => {
@@ -154,7 +184,7 @@ export function Sidebar({
         </div>
 
         <nav className="px-2 space-y-0.5 overflow-y-auto">
-          {ITEMS.map((it) => {
+          {visibleItems.map((it) => {
             const isActive = isActiveLink(it.href, pathname);
             return (
               <Link
@@ -196,7 +226,9 @@ export function Sidebar({
                 <div className="text-sm text-text truncate" title={email}>
                   {displayName}
                 </div>
-                <div className="text-2xs text-muted uppercase tracking-wider">Admin</div>
+                <div className="text-2xs text-muted uppercase tracking-wider">
+                  {role === "admin" ? "Admin" : "Membro"}
+                </div>
               </div>
             </Link>
             <form action={signOut}>
