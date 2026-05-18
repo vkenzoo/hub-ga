@@ -214,7 +214,7 @@ export async function createOutbound(formData: FormData) {
 
   revalidatePath("/connections");
   redirect(
-    tabRedirect(
+    sectionRedirect(
       "outbound",
       `saved=${encodeURIComponent(label)}&new_secret=${encodeURIComponent(secret)}&new_id=${data.id}`,
     ),
