@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
 import { PageBody, PageHeader } from "@/components/page";
 
 // Quais status podem ser reprocessados (tipicamente os que não criaram purchase
@@ -14,11 +16,12 @@ const REPLAYABLE_STATUSES = new Set([
 
 async function replayExecution(formData: FormData) {
   "use server";
+  const me = await requireAdmin();
   const id = String(formData.get("id"));
   const sb = createSupabaseAdmin();
   const { data: exec } = await sb
     .from("webhook_executions")
-    .select("gateway, raw_body, raw_headers")
+    .select("gateway, raw_body, raw_headers, status, raw_event_type")
     .eq("id", id)
     .maybeSingle();
 
@@ -48,6 +51,17 @@ async function replayExecution(formData: FormData) {
     body: exec.raw_body,
   }).catch((err) => {
     console.error("[replayExecution] fetch failed:", err);
+  });
+
+  await logAudit({
+    actor: me.email,
+    action: "execution.replay",
+    target: id,
+    payload: {
+      gateway: exec.gateway,
+      previous_status: exec.status,
+      raw_event_type: exec.raw_event_type,
+    },
   });
 
   revalidatePath("/executions");

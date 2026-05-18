@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit";
 import { PageBody, PageHeader, Field } from "@/components/page";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -10,7 +11,7 @@ const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
 
 async function updateProfile(formData: FormData) {
   "use server";
-  const { user } = await requireAdmin();
+  const { user, email } = await requireAdmin();
   const admin = createSupabaseAdmin();
 
   const name = String(formData.get("name") ?? "").trim();
@@ -61,6 +62,16 @@ async function updateProfile(formData: FormData) {
     console.error("[profile] update failed:", error);
     redirect("/profile?error=update_failed");
   }
+
+  await logAudit({
+    actor: email,
+    action: "profile.update",
+    target: email,
+    payload: {
+      name_changed: name !== (currentMeta.name ?? ""),
+      avatar_changed: !!(avatar && avatar.size > 0) || removeAvatar,
+    },
+  });
 
   revalidatePath("/profile");
   redirect("/profile?saved=1");

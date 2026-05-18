@@ -40,6 +40,9 @@ const I = {
   team: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-3-3.87"/><path d="M4 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><circle cx="10" cy="7" r="4"/></svg>
   ),
+  audit: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h6"/><path d="M22 12h-6"/><path d="M12 2v6"/><path d="M12 22v-6"/><path d="M20 16l-4-4 4-4"/><path d="M4 8l4 4-4 4"/><path d="M16 4l-4 4-4-4"/><path d="M8 20l4-4 4 4"/></svg>
+  ),
 };
 
 type Section =
@@ -67,6 +70,7 @@ const ITEMS: ItemWithRole[] = [
   { href: "/webhooks", label: "Webhooks", icon: I.webhooks, section: "webhooks" },
   { href: "/executions", label: "Executions", icon: I.executions, section: "executions" },
   { href: "/team", label: "Equipe", icon: I.team, superAdminOnly: true },
+  { href: "/audit", label: "Auditoria", icon: I.audit, superAdminOnly: true },
 ];
 
 function isActiveLink(href: string, pathname: string): boolean {

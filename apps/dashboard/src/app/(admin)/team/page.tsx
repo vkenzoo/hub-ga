@@ -7,6 +7,7 @@ import {
   type Section,
 } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit";
 import { PageBody, PageHeader, Field } from "@/components/page";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -109,6 +110,13 @@ async function inviteMember(formData: FormData) {
     redirect("/team?error=insert_failed");
   }
 
+  await logAudit({
+    actor: me.email,
+    action: "team.invite",
+    target: email,
+    payload: { role, allowed_sections, access_mode: accessMode },
+  });
+
   revalidatePath("/team");
   redirect(
     `/team?invited=${encodeURIComponent(email)}&pwd=${encodeURIComponent(tempPassword)}&mode=${accessMode}`,
@@ -130,7 +138,25 @@ async function updateAccess(formData: FormData) {
     redirect("/team?error=cant_demote_self");
   }
 
+  // Captura estado antes pra registrar diff no audit log
+  const { data: before } = await sb
+    .from("admin_users")
+    .select("role, allowed_sections")
+    .eq("email", email)
+    .maybeSingle();
+
   await sb.from("admin_users").update({ role, allowed_sections }).eq("email", email);
+
+  await logAudit({
+    actor: me.email,
+    action: "team.update",
+    target: email,
+    payload: {
+      before: before ?? null,
+      after: { role, allowed_sections },
+    },
+  });
+
   revalidatePath("/team");
   redirect(`/team?changed=${encodeURIComponent(email)}`);
 }
@@ -145,7 +171,21 @@ async function removeMember(formData: FormData) {
     redirect("/team?error=cant_remove_self");
   }
 
+  const { data: before } = await sb
+    .from("admin_users")
+    .select("role, allowed_sections")
+    .eq("email", email)
+    .maybeSingle();
+
   await sb.from("admin_users").delete().eq("email", email);
+
+  await logAudit({
+    actor: me.email,
+    action: "team.remove",
+    target: email,
+    payload: { previous: before ?? null },
+  });
+
   revalidatePath("/team");
   redirect(`/team?removed=${encodeURIComponent(email)}`);
 }
