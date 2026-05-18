@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { signOut } from "@/app/login/actions";
 
 interface Item {
@@ -66,81 +67,149 @@ export function Sidebar({
   const pathname = usePathname() ?? "/";
   const displayName = name?.trim() || email.split("@")[0] || email;
   const isProfileActive = pathname === "/profile";
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Fecha o drawer ao mudar de rota
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Bloqueia scroll do body quando o drawer está aberto
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [mobileOpen]);
 
   return (
-    <aside className="w-60 shrink-0 border-r border-line bg-surface/40 flex flex-col h-screen sticky top-0">
-      <div className="px-4 py-4 border-b border-line">
-        <Image
-          src="/logo.png"
-          alt="Geração A"
-          width={200}
-          height={40}
-          priority
-          className="h-6 w-auto"
+    <>
+      {/* Top bar mobile — só aparece <md */}
+      <header className="md:hidden sticky top-0 z-30 bg-bg border-b border-line flex items-center justify-between px-3 py-2.5">
+        <Link href="/" className="flex items-center">
+          <Image
+            src="/logo.png"
+            alt="Geração A"
+            width={200}
+            height={40}
+            priority
+            className="h-5 w-auto"
+          />
+        </Link>
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Abrir menu"
+          className="p-1.5 rounded-md hover:bg-surface2 transition"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+        </button>
+      </header>
+
+      {/* Backdrop mobile */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/60"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden
         />
-        <div className="text-2xs text-muted mt-2 uppercase tracking-wider">Hub Admin</div>
-      </div>
+      )}
 
-      <div className="px-4 pt-5 pb-2">
-        <span className="label">Geral</span>
-      </div>
-
-      <nav className="px-2 space-y-0.5">
-        {ITEMS.map((it) => {
-          const isActive = isActiveLink(it.href, pathname);
-          return (
-            <Link
-              key={it.href}
-              href={it.href}
-              className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition ${
-                isActive ? "bg-surface2 text-text" : "text-text2 hover:bg-surface hover:text-text"
-              }`}
-            >
-              <span className={isActive ? "text-brand" : ""}>{it.icon}</span>
-              {it.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="mt-auto border-t border-line p-3">
-        <div className="flex items-center gap-2 px-1 py-1">
-          <Link
-            href="/profile"
-            className={`flex items-center gap-2.5 flex-1 min-w-0 rounded-md p-1 transition ${
-              isProfileActive ? "bg-surface2" : "hover:bg-surface2"
-            }`}
-            title="Editar perfil"
+      {/* Sidebar — fixa em md+, drawer em mobile */}
+      <aside
+        className={`
+          w-60 shrink-0 border-r border-line bg-surface/95 md:bg-surface/40
+          flex flex-col h-screen
+          fixed md:sticky top-0 left-0 z-50
+          transition-transform duration-200
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+        `}
+      >
+        <div className="px-4 py-4 border-b border-line flex items-start justify-between">
+          <div>
+            <Image
+              src="/logo.png"
+              alt="Geração A"
+              width={200}
+              height={40}
+              priority
+              className="h-6 w-auto"
+            />
+            <div className="text-2xs text-muted mt-2 uppercase tracking-wider">Hub Admin</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Fechar menu"
+            className="md:hidden p-1 rounded-md hover:bg-surface2 transition text-muted"
           >
-            {avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarUrl}
-                alt={displayName}
-                className="w-7 h-7 rounded-full object-cover border border-line"
-              />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-surface2 border border-line grid place-items-center text-xs text-text2">
-                {displayName[0]?.toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="text-sm text-text truncate" title={email}>
-                {displayName}
-              </div>
-              <div className="text-2xs text-muted uppercase tracking-wider">Admin</div>
-            </div>
-          </Link>
-          <form action={signOut}>
-            <button
-              title="Sair"
-              className="p-1.5 rounded-md text-muted hover:text-text hover:bg-surface2 transition"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-            </button>
-          </form>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
         </div>
-      </div>
-    </aside>
+
+        <div className="px-4 pt-5 pb-2">
+          <span className="label">Geral</span>
+        </div>
+
+        <nav className="px-2 space-y-0.5 overflow-y-auto">
+          {ITEMS.map((it) => {
+            const isActive = isActiveLink(it.href, pathname);
+            return (
+              <Link
+                key={it.href}
+                href={it.href}
+                className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition ${
+                  isActive ? "bg-surface2 text-text" : "text-text2 hover:bg-surface hover:text-text"
+                }`}
+              >
+                <span className={isActive ? "text-brand" : ""}>{it.icon}</span>
+                {it.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="mt-auto border-t border-line p-3">
+          <div className="flex items-center gap-2 px-1 py-1">
+            <Link
+              href="/profile"
+              className={`flex items-center gap-2.5 flex-1 min-w-0 rounded-md p-1 transition ${
+                isProfileActive ? "bg-surface2" : "hover:bg-surface2"
+              }`}
+              title="Editar perfil"
+            >
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarUrl}
+                  alt={displayName}
+                  className="w-7 h-7 rounded-full object-cover border border-line"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-surface2 border border-line grid place-items-center text-xs text-text2">
+                  {displayName[0]?.toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="text-sm text-text truncate" title={email}>
+                  {displayName}
+                </div>
+                <div className="text-2xs text-muted uppercase tracking-wider">Admin</div>
+              </div>
+            </Link>
+            <form action={signOut}>
+              <button
+                title="Sair"
+                className="p-1.5 rounded-md text-muted hover:text-text hover:bg-surface2 transition"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+              </button>
+            </form>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }
