@@ -6,7 +6,7 @@ import { requireAdmin, canAccessSection } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 
-type Tab = "meta_ads" | "inlead" | "cademi" | "outbound";
+type Section = "meta-ads" | "inlead" | "cademi" | "outbound";
 
 async function requireConnections() {
   const auth = await requireAdmin();
@@ -25,8 +25,8 @@ function generateSecret(len = 32): string {
   return out;
 }
 
-function tabRedirect(tab: Tab, extra?: string): string {
-  return `/connections?tab=${tab}${extra ? "&" + extra : ""}`;
+function sectionRedirect(section: Section, extra?: string): string {
+  return `/connections/${section}${extra ? "?" + extra : ""}`;
 }
 
 // ── Meta Ads ────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ export async function createMetaAds(formData: FormData) {
   const access_token = String(formData.get("access_token") ?? "").trim();
 
   if (!label || !app_id || !app_secret || !business_manager_id || !access_token) {
-    redirect(tabRedirect("meta_ads", "error=missing_fields"));
+    redirect(sectionRedirect("meta-ads", "error=missing_fields"));
   }
 
   const { data, error } = await sb
@@ -58,7 +58,7 @@ export async function createMetaAds(formData: FormData) {
 
   if (error) {
     console.error("[connections] meta_ads insert failed:", error);
-    redirect(tabRedirect("meta_ads", "error=insert_failed"));
+    redirect(sectionRedirect("meta-ads", "error=insert_failed"));
   }
 
   await logAudit({
@@ -69,7 +69,7 @@ export async function createMetaAds(formData: FormData) {
   });
 
   revalidatePath("/connections");
-  redirect(tabRedirect("meta_ads", `saved=${encodeURIComponent(label)}`));
+  redirect(sectionRedirect("meta-ads", `saved=${encodeURIComponent(label)}`));
 }
 
 // ── InLead ──────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ export async function createInLead(formData: FormData) {
   const sb = createSupabaseAdmin();
 
   const label = String(formData.get("label") ?? "").trim();
-  if (!label) redirect(tabRedirect("inlead", "error=missing_label"));
+  if (!label) redirect(sectionRedirect("inlead", "error=missing_label"));
 
   const secret = generateSecret(40);
 
@@ -96,7 +96,7 @@ export async function createInLead(formData: FormData) {
 
   if (error) {
     console.error("[connections] inlead insert failed:", error);
-    redirect(tabRedirect("inlead", "error=insert_failed"));
+    redirect(sectionRedirect("inlead", "error=insert_failed"));
   }
 
   await logAudit({
@@ -107,7 +107,7 @@ export async function createInLead(formData: FormData) {
   });
 
   revalidatePath("/connections");
-  redirect(tabRedirect("inlead", `saved=${encodeURIComponent(label)}`));
+  redirect(sectionRedirect("inlead", `saved=${encodeURIComponent(label)}`));
 }
 
 // ── Cademí ──────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ export async function createCademi(formData: FormData) {
   const api_key = String(formData.get("api_key") ?? "").trim();
 
   if (!label || !api_key) {
-    redirect(tabRedirect("cademi", "error=missing_fields"));
+    redirect(sectionRedirect("cademi", "error=missing_fields"));
   }
 
   const { data, error } = await sb
@@ -136,7 +136,7 @@ export async function createCademi(formData: FormData) {
 
   if (error) {
     console.error("[connections] cademi insert failed:", error);
-    redirect(tabRedirect("cademi", "error=insert_failed"));
+    redirect(sectionRedirect("cademi", "error=insert_failed"));
   }
 
   await logAudit({
@@ -147,7 +147,7 @@ export async function createCademi(formData: FormData) {
   });
 
   revalidatePath("/connections");
-  redirect(tabRedirect("cademi", `saved=${encodeURIComponent(label)}`));
+  redirect(sectionRedirect("cademi", `saved=${encodeURIComponent(label)}`));
 }
 
 // ── Conexão (qualquer kind) ─────────────────────────────────────
@@ -157,7 +157,7 @@ export async function deleteConnection(formData: FormData) {
   const sb = createSupabaseAdmin();
 
   const id = String(formData.get("id") ?? "");
-  const tab = (String(formData.get("tab") ?? "meta_ads") as Tab);
+  const section = (String(formData.get("section") ?? "meta-ads") as Section);
 
   const { data: before } = await sb
     .from("connections")
@@ -175,7 +175,7 @@ export async function deleteConnection(formData: FormData) {
   });
 
   revalidatePath("/connections");
-  redirect(tabRedirect(tab, `removed=${encodeURIComponent(before?.label ?? id)}`));
+  redirect(sectionRedirect(section, `removed=${encodeURIComponent(before?.label ?? id)}`));
 }
 
 // ── Outbound webhooks ───────────────────────────────────────────
@@ -188,9 +188,9 @@ export async function createOutbound(formData: FormData) {
   const url = String(formData.get("url") ?? "").trim();
   const events = formData.getAll("events").map(String);
 
-  if (!label || !url) redirect(tabRedirect("outbound", "error=missing_fields"));
-  if (!url.startsWith("https://")) redirect(tabRedirect("outbound", "error=invalid_url"));
-  if (events.length === 0) redirect(tabRedirect("outbound", "error=no_events"));
+  if (!label || !url) redirect(sectionRedirect("outbound", "error=missing_fields"));
+  if (!url.startsWith("https://")) redirect(sectionRedirect("outbound", "error=invalid_url"));
+  if (events.length === 0) redirect(sectionRedirect("outbound", "error=no_events"));
 
   const secret = generateSecret(40);
 
@@ -202,7 +202,7 @@ export async function createOutbound(formData: FormData) {
 
   if (error) {
     console.error("[connections] outbound insert failed:", error);
-    redirect(tabRedirect("outbound", "error=insert_failed"));
+    redirect(sectionRedirect("outbound", "error=insert_failed"));
   }
 
   await logAudit({
@@ -245,7 +245,7 @@ export async function toggleOutbound(formData: FormData) {
   });
 
   revalidatePath("/connections");
-  redirect(tabRedirect("outbound"));
+  redirect(sectionRedirect("outbound"));
 }
 
 export async function deleteOutbound(formData: FormData) {
@@ -270,5 +270,5 @@ export async function deleteOutbound(formData: FormData) {
   });
 
   revalidatePath("/connections");
-  redirect(tabRedirect("outbound", `removed=${encodeURIComponent(before?.label ?? id)}`));
+  redirect(sectionRedirect("outbound", `removed=${encodeURIComponent(before?.label ?? id)}`));
 }
