@@ -64,8 +64,14 @@ const LEVEL_STYLES: Record<string, { dot: string; text: string }> = {
   error: { dot: "bg-danger", text: "text-danger" },
 };
 
+const LEVEL_DEFAULT = { dot: "bg-info", text: "text-info" };
+
 function statusInfo(status: string) {
   return STATUS_STYLES[status] ?? { dot: "bg-text2", text: "text-text2", label: status };
+}
+
+function levelStyle(level: string) {
+  return LEVEL_STYLES[level] ?? LEVEL_DEFAULT;
 }
 
 function fmtDateTime(iso: string) {
@@ -306,7 +312,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           ) : (
             <ul className="divide-y divide-line">
               {ls.map((l) => {
-                const lv = LEVEL_STYLES[l.level] ?? LEVEL_STYLES.info;
+                const lv = levelStyle(l.level);
                 const hasPayload = l.payload != null && Object.keys(l.payload as object).length > 0;
                 return (
                   <li key={l.id} className="px-4 py-3">
