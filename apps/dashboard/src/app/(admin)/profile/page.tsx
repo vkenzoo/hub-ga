@@ -63,7 +63,6 @@ async function updateProfile(formData: FormData) {
   }
 
   revalidatePath("/profile");
-  revalidatePath("/", "layout"); // sidebar reflete imediatamente
   redirect("/profile?saved=1");
 }
 

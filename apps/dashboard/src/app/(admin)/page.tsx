@@ -83,27 +83,51 @@ async function getOverview(period: Period, from?: string, to?: string) {
   const startISO = start?.toISOString();
   const endISO = end?.toISOString();
 
-  // Stats de domínio (contagens)
+  // Tudo em paralelo — antes eram 5 batches sequenciais, agora 1 batch só.
+  // Reduz ~600ms (5 RTTs) pra ~120ms (1 RTT) em ambientes com latência típica.
+  const newStudentsQuery =
+    startISO || endISO
+      ? (() => {
+          let q = sb.from("customers").select("*", { count: "exact", head: true });
+          if (startISO) q = q.gte("first_seen_at", startISO);
+          if (endISO) q = q.lt("first_seen_at", endISO);
+          return q;
+        })()
+      : null;
+
   const [
     { count: customersCount },
     { count: subscriptionsCount },
     { count: productsCount },
     { count: systemsCount },
     { count: grantsCount },
+    { data: paidRows },
+    newStudentsResult,
+    { data: latestEventsData },
+    { data: latestPurchasesData },
   ] = await Promise.all([
     sb.from("customers").select("*", { count: "exact", head: true }),
     sb.from("subscriptions").select("*", { count: "exact", head: true }),
     sb.from("products").select("*", { count: "exact", head: true }),
     sb.from("systems").select("*", { count: "exact", head: true }),
     sb.from("access_grants").select("*", { count: "exact", head: true }),
+    sb
+      .from("purchases")
+      .select("amount, subscription_cycle, created_at")
+      .eq("status", "paid")
+      .limit(50000),
+    newStudentsQuery ?? Promise.resolve({ count: null as number | null }),
+    sb
+      .from("events_log")
+      .select("id,kind,level,created_at")
+      .order("created_at", { ascending: false })
+      .limit(8),
+    sb
+      .from("purchases")
+      .select("id,amount,gateway,status,created_at,customers(email),products(name)")
+      .order("created_at", { ascending: false })
+      .limit(5),
   ]);
-
-  // Todas as compras pagas — pra calcular o acumulado lifetime
-  const { data: paidRows } = await sb
-    .from("purchases")
-    .select("amount, subscription_cycle, created_at")
-    .eq("status", "paid")
-    .limit(50000);
 
   const paid = (paidRows ?? []) as Array<{
     amount: number;
@@ -125,27 +149,9 @@ async function getOverview(period: Period, from?: string, to?: string) {
     .reduce((s, p) => s + Number(p.amount), 0);
   const periodSalesCount = inPeriod.length;
 
-  // Novos alunos no período = customers com first_seen_at dentro do range
-  let newStudents = customersCount ?? 0;
-  if (startISO || endISO) {
-    let q = sb.from("customers").select("*", { count: "exact", head: true });
-    if (startISO) q = q.gte("first_seen_at", startISO);
-    if (endISO) q = q.lt("first_seen_at", endISO);
-    const { count } = await q;
-    newStudents = count ?? 0;
-  }
-
-  const { data: latestEvents } = await sb
-    .from("events_log")
-    .select("id,kind,level,created_at")
-    .order("created_at", { ascending: false })
-    .limit(8);
-
-  const { data: latestPurchases } = await sb
-    .from("purchases")
-    .select("id,amount,gateway,status,created_at,customers(email),products(name)")
-    .order("created_at", { ascending: false })
-    .limit(5);
+  const newStudents = newStudentsResult.count ?? customersCount ?? 0;
+  const latestEvents = latestEventsData;
+  const latestPurchases = latestPurchasesData;
 
   return {
     counts: {
