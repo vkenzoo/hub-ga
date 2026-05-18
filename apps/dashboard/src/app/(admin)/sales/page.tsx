@@ -83,6 +83,18 @@ function statusChip(status: string) {
   return { dot: "bg-text2", label: status };
 }
 
+function buildQuery(
+  sp: { q?: string; gateway?: string; status?: string },
+  cols: OptionalKey[],
+): string {
+  const params = new URLSearchParams();
+  if (sp.q) params.set("q", sp.q);
+  if (sp.gateway && sp.gateway !== "all") params.set("gateway", sp.gateway);
+  if (sp.status && sp.status !== "all") params.set("status", sp.status);
+  for (const c of cols) params.append("cols", c);
+  return params.toString();
+}
+
 function parseCols(raw: string | string[] | undefined): OptionalKey[] {
   if (!raw) return DEFAULT_COLS;
   const arr = Array.isArray(raw) ? raw : raw.split(",");
@@ -207,8 +219,18 @@ export default async function Page({
           </Link>
         </form>
 
-        {/* Toggle de colunas */}
-        <ColumnsToggle current={cols} filters={{ q: sp.q, gateway: sp.gateway, status: sp.status }} />
+        {/* Toggle de colunas + export */}
+        <div className="flex items-center justify-end gap-2">
+          <a
+            href={`/api/sales/export?${buildQuery(sp, cols)}`}
+            className="btn btn-sm btn-ghost"
+            title="Baixa CSV com os filtros e colunas atuais (até 5000 linhas)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            Exportar CSV
+          </a>
+          <ColumnsToggle current={cols} filters={{ q: sp.q, gateway: sp.gateway, status: sp.status }} />
+        </div>
 
         {/* Tabela */}
         <div className="card overflow-hidden">

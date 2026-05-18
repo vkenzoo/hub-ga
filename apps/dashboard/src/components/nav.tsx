@@ -33,11 +33,15 @@ const I = {
   executions: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
   ),
+  subs: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+  ),
 };
 
 const ITEMS: Item[] = [
   { href: "/", label: "Resumo", icon: I.resumo },
   { href: "/sales", label: "Vendas", icon: I.sales },
+  { href: "/subscriptions", label: "Assinaturas", icon: I.subs },
   { href: "/customers", label: "Clientes", icon: I.customers },
   { href: "/systems", label: "Sistemas", icon: I.systems },
   { href: "/products", label: "Produtos", icon: I.products },
