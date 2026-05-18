@@ -1,7 +1,58 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader } from "@/components/page";
+
+// Quais status podem ser reprocessados (tipicamente os que não criaram purchase
+// e podem ter sido resolvidos por configuração posterior)
+const REPLAYABLE_STATUSES = new Set([
+  "unknown_product",
+  "missing_data",
+  "failed",
+]);
+
+async function replayExecution(formData: FormData) {
+  "use server";
+  const id = String(formData.get("id"));
+  const sb = createSupabaseAdmin();
+  const { data: exec } = await sb
+    .from("webhook_executions")
+    .select("gateway, raw_body, raw_headers")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!exec) return;
+
+  const base =
+    process.env.WEBHOOKS_BASE_URL ??
+    process.env.NEXT_PUBLIC_WEBHOOKS_BASE_URL ??
+    "https://webhooks.hubgeracaoa.com";
+  const url = `${base.replace(/\/$/, "")}/api/webhooks/${exec.gateway}`;
+
+  const headers: Record<string, string> = {};
+  const rawHeaders = (exec.raw_headers ?? {}) as Record<string, string>;
+  for (const [k, v] of Object.entries(rawHeaders)) {
+    // Pula headers controlados pelo host/fetch e os mascarados (que iam quebrar HMAC)
+    const lk = k.toLowerCase();
+    if (lk === "host" || lk === "content-length" || lk === "connection") continue;
+    if (lk === "authorization" || lk === "cookie") continue;
+    headers[k] = v;
+  }
+  headers["content-type"] = headers["content-type"] ?? "application/json";
+  headers["x-hub-replay-of"] = id;
+
+  await fetch(url, {
+    method: "POST",
+    headers,
+    body: exec.raw_body,
+  }).catch((err) => {
+    console.error("[replayExecution] fetch failed:", err);
+  });
+
+  revalidatePath("/executions");
+  revalidatePath(`/executions/${id}`);
+}
 
 interface ExecutionRow {
   id: string;
@@ -146,6 +197,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
   const s = statusInfo(e.status);
   const bodyPretty = prettyJson(e.raw_body);
+  const canReplay = REPLAYABLE_STATUSES.has(e.status);
 
   return (
     <>
@@ -153,9 +205,23 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         title={`Execution ${e.id.slice(0, 8)}`}
         subtitle={`${e.gateway} · ${fmtDateTime(e.created_at)}`}
         right={
-          <Link href="/executions" className="btn btn-sm">
-            ← Executions
-          </Link>
+          <div className="flex items-center gap-2">
+            {canReplay && (
+              <form action={replayExecution}>
+                <input type="hidden" name="id" value={e.id} />
+                <button
+                  className="btn btn-sm btn-primary"
+                  title="Reenviar este webhook pra rota de produção. Útil quando o motivo do skip já foi resolvido (ex: produto cadastrado depois)."
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                  Reprocessar
+                </button>
+              </form>
+            )}
+            <Link href="/executions" className="btn btn-sm">
+              ← Executions
+            </Link>
+          </div>
         }
       />
 
