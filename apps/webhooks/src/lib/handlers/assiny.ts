@@ -145,6 +145,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
     eventKind: kind,
     gatewayEventId,
     gatewayProductId: productGwId,
+    productNameHint: event.data.offer?.product?.name ?? event.data.offer?.name,
     customer: {
       email: event.client.email,
       name: clientName(event.client),

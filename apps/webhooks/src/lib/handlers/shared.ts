@@ -33,6 +33,7 @@ export interface NormalizedPurchase {
   eventKind: EventKind;
   gatewayEventId: string;
   gatewayProductId: string;
+  productNameHint?: string;
   customer: { email: string; name?: string; phone?: string };
   amount: number;
   status: PurchaseStatus;
@@ -58,7 +59,7 @@ export interface SubscriptionStatusEvent {
   currentPeriodEnd?: string | null;
 }
 
-type FoundProduct = { id: string };
+type FoundProduct = { id: string; pendingConfig: boolean };
 
 async function findProductByGatewayId(
   hub: SupabaseClient,
@@ -67,14 +68,39 @@ async function findProductByGatewayId(
 ): Promise<FoundProduct | null> {
   const { data, error } = await hub
     .from("products")
-    .select("id, gateway_ids")
+    .select("id, pending_config")
     .filter("gateway_ids->>" + gateway, "eq", gatewayProductId)
     .maybeSingle();
   if (error) {
     console.error("[findProductByGatewayId]", error);
     return null;
   }
-  return data ? { id: data.id as string } : null;
+  return data
+    ? { id: data.id as string, pendingConfig: Boolean(data.pending_config) }
+    : null;
+}
+
+/**
+ * Auto-cadastra produto descoberto via webhook como rascunho. Admin precisa
+ * abrir no dashboard e configurar entitlements + duration antes de provisionar.
+ */
+async function createDraftProduct(
+  hub: SupabaseClient,
+  gateway: Gateway,
+  gatewayProductId: string,
+  nameHint: string | undefined,
+): Promise<void> {
+  const name = nameHint?.trim() || `[draft] ${gateway} ${gatewayProductId}`;
+  const { error } = await hub.from("products").insert({
+    name,
+    billing_type: "one_time",
+    gateway_ids: { [gateway]: gatewayProductId },
+    requires_app_access: true,
+    pending_config: true,
+  });
+  if (error) {
+    console.error("[createDraftProduct]", error);
+  }
 }
 
 async function upsertCustomer(
@@ -130,12 +156,31 @@ export async function recordPurchase(
     return { skipped: true, reason: "duplicate" };
   }
 
-  // 2. Resolve produto
+  // 2. Resolve produto. Se não existir, auto-cadastra como rascunho e pula.
+  // Se existir mas estiver pending_config, também pula (admin ainda não configurou).
   const product = await findProductByGatewayId(hub, p.gateway, p.gatewayProductId);
   if (!product) {
-    await logEvent(hub, "webhook.unknown_product", {
+    await createDraftProduct(hub, p.gateway, p.gatewayProductId, p.productNameHint);
+    await logEvent(hub, "webhook.product_drafted", {
       level: "warn",
-      payload: { gateway: p.gateway, gateway_product_id: p.gatewayProductId, email: p.customer.email },
+      payload: {
+        gateway: p.gateway,
+        gateway_product_id: p.gatewayProductId,
+        name_hint: p.productNameHint ?? null,
+        email: p.customer.email,
+      },
+    });
+    return { skipped: true, reason: "unknown_product" };
+  }
+  if (product.pendingConfig) {
+    await logEvent(hub, "webhook.product_pending_config", {
+      level: "warn",
+      payload: {
+        gateway: p.gateway,
+        gateway_product_id: p.gatewayProductId,
+        product_id: product.id,
+        email: p.customer.email,
+      },
     });
     return { skipped: true, reason: "unknown_product" };
   }

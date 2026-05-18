@@ -12,6 +12,7 @@ interface ProductRow {
   billing_type: string;
   gateway_ids: Record<string, string> | null;
   requires_app_access: boolean;
+  pending_config: boolean;
 }
 interface SystemRow { id: string; slug: string; name: string }
 interface EntitlementRow {
@@ -78,6 +79,15 @@ async function updateProduct(formData: FormData) {
     })
     .eq("id", id);
   revalidatePath(`/products/${id}`);
+}
+
+async function markConfigured(formData: FormData) {
+  "use server";
+  const sb = createSupabaseAdmin();
+  const id = String(formData.get("id"));
+  await sb.from("products").update({ pending_config: false }).eq("id", id);
+  revalidatePath(`/products/${id}`);
+  revalidatePath("/products");
 }
 
 async function deleteProduct(formData: FormData) {
@@ -172,6 +182,24 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       />
 
       <PageBody>
+        {/* Banner de configuração pendente */}
+        {p.pending_config && (
+          <div className="card border-warn/40 bg-warn/5 px-4 py-3 flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm text-warn font-medium">Produto descoberto via webhook</div>
+              <p className="text-xs text-text2 mt-0.5">
+                Nome, gateway e ID já preenchidos pelo webhook. Configure abaixo os entitlements
+                (sistema/tier/duração) e marque como configurado pra liberar provisionamento automático
+                nas próximas vendas.
+              </p>
+            </div>
+            <form action={markConfigured} className="shrink-0">
+              <input type="hidden" name="id" value={p.id} />
+              <button className="btn btn-sm btn-primary">Marcar como configurado</button>
+            </form>
+          </div>
+        )}
+
         {/* Dados do produto */}
         <form action={updateProduct} className="card">
           <header className="px-4 py-3 border-b border-line">

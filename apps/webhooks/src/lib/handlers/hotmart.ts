@@ -99,6 +99,7 @@ export async function handleHotmartEvent(hub: SupabaseClient, event: HotmartEven
     eventKind: kind,
     gatewayEventId: event.id,
     gatewayProductId: d.product.id,
+    productNameHint: d.product.name,
     customer: {
       email: d.buyer.email,
       name: d.buyer.name,
