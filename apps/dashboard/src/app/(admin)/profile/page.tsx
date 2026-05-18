@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, Field } from "@/components/page";
+import { SubmitButton } from "@/components/submit-button";
 
 const ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -167,7 +168,7 @@ export default async function Page({
           </div>
 
           <footer className="px-4 py-3 border-t border-line flex justify-end gap-2">
-            <button className="btn btn-sm btn-primary">Salvar alterações</button>
+            <SubmitButton>Salvar alterações</SubmitButton>
           </footer>
         </form>
 
