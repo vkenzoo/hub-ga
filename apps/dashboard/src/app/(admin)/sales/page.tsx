@@ -39,46 +39,8 @@ const OPTIONAL_COLUMNS = [
 
 type OptionalKey = (typeof OPTIONAL_COLUMNS)[number]["key"];
 
-type PresetKey = "essencial" | "marketing" | "tudo";
-
-const PRESETS: Record<PresetKey, { label: string; hint: string; cols: OptionalKey[] }> = {
-  essencial: {
-    label: "Essencial",
-    hint: "Só cliente, valor e pagamento",
-    cols: [],
-  },
-  marketing: {
-    label: "Marketing",
-    hint: "Produto, origem, campanha e afiliado",
-    cols: ["product", "utm_source", "utm_campaign", "affiliate_id"],
-  },
-  tudo: {
-    label: "Tudo",
-    hint: "Produto, funil, oferta e todas as UTMs",
-    cols: [
-      "product",
-      "gateway_funnel_name",
-      "gateway_offer_name",
-      "utm_source",
-      "utm_campaign",
-      "affiliate_id",
-      "utm_medium",
-      "utm_content",
-      "utm_term",
-    ],
-  },
-};
-
-const DEFAULT_PRESET: PresetKey = "marketing";
-const DEFAULT_COLS: OptionalKey[] = PRESETS[DEFAULT_PRESET].cols;
-
-function matchPreset(cols: OptionalKey[]): PresetKey | null {
-  const sig = [...cols].sort().join(",");
-  for (const [k, p] of Object.entries(PRESETS) as Array<[PresetKey, (typeof PRESETS)[PresetKey]]>) {
-    if ([...p.cols].sort().join(",") === sig) return k;
-  }
-  return null;
-}
+// Default quando o usuário ainda não personalizou. Marketing-friendly.
+const DEFAULT_COLS: OptionalKey[] = ["product", "utm_source", "utm_campaign", "affiliate_id"];
 
 function fmtMoney(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -373,49 +335,15 @@ function ColumnsToggle({
   current: OptionalKey[];
   filters: { q?: string; gateway?: string; status?: string };
 }) {
-  const activePreset = matchPreset(current);
-  const baseParams = new URLSearchParams();
-  if (filters.q) baseParams.set("q", filters.q);
-  if (filters.gateway) baseParams.set("gateway", filters.gateway);
-  if (filters.status) baseParams.set("status", filters.status);
-
-  function presetHref(p: PresetKey): string {
-    const params = new URLSearchParams(baseParams);
-    for (const c of PRESETS[p].cols) params.append("cols", c);
-    const qs = params.toString();
-    return `/sales${qs ? "?" + qs : ""}`;
-  }
-
   const set = new Set<string>(current);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="label">Colunas:</span>
-      {(Object.keys(PRESETS) as PresetKey[]).map((p) => {
-        const isActive = activePreset === p;
-        return (
-          <Link
-            key={p}
-            href={presetHref(p)}
-            title={PRESETS[p].hint}
-            className={`btn btn-sm ${isActive ? "btn-primary" : "btn-ghost"}`}
-          >
-            {PRESETS[p].label}
-          </Link>
-        );
-      })}
-
+    <div className="flex justify-end">
       <details className="relative">
-        <summary
-          className={`btn btn-sm btn-ghost list-none cursor-pointer ${
-            !activePreset ? "border-brand/40 text-brand" : ""
-          }`}
-        >
+        <summary className="btn btn-sm btn-ghost list-none cursor-pointer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          Personalizar
-          {!activePreset && (
-            <span className="text-2xs">({current.length})</span>
-          )}
+          Personalizar colunas
+          <span className="text-2xs text-muted">({current.length})</span>
         </summary>
         <form className="absolute right-0 top-full mt-1 w-72 card p-3 z-10 shadow-lg">
           {filters.q && <input type="hidden" name="q" value={filters.q} />}
