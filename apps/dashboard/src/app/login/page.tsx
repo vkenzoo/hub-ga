@@ -10,11 +10,12 @@ export default async function LoginPage({
   return (
     <main className="min-h-screen grid place-items-center px-6">
       <div className="w-full max-w-sm">
-        <div className="flex items-center gap-2.5 mb-10">
-          <div className="w-7 h-7 rounded-md bg-accent grid place-items-center text-bg font-semibold">
-            H
+        <div className="mb-10">
+          <div className="flex items-baseline gap-0.5 leading-none">
+            <span className="font-bold text-xl tracking-tight text-text">GERAÇÃO</span>
+            <span className="font-bold text-xl text-brand">A</span>
           </div>
-          <span className="text-sm font-medium">Hub Admin</span>
+          <div className="text-2xs text-muted mt-1 uppercase tracking-wider">Hub Admin</div>
         </div>
 
         <h1 className="text-xl font-medium mb-1">Entrar</h1>

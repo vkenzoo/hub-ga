@@ -14,7 +14,7 @@
     font-variant-numeric: tabular-nums;
   }
   ::selection {
-    background: #22c55e33;
+    background: #ec2d7c33;
     color: #fafafa;
   }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -40,7 +40,7 @@
       hover:border-line2 hover:bg-surface2 disabled:opacity-40 disabled:pointer-events-none;
   }
   .btn-primary {
-    @apply border-accentDim bg-accent text-bg hover:bg-accentDim;
+    @apply border-brandDim bg-brand text-text hover:bg-brandDim;
   }
   .btn-ghost {
     @apply border-transparent bg-transparent hover:bg-surface;

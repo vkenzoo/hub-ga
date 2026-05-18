@@ -54,14 +54,12 @@ export function Sidebar({ email }: { email: string }) {
 
   return (
     <aside className="w-60 shrink-0 border-r border-line bg-surface/40 flex flex-col h-screen sticky top-0">
-      <div className="px-4 py-4 flex items-center gap-2.5 border-b border-line">
-        <div className="w-7 h-7 rounded-md bg-accent grid place-items-center text-bg font-semibold text-sm">
-          H
+      <div className="px-4 py-4 border-b border-line">
+        <div className="flex items-baseline gap-0.5 leading-none">
+          <span className="font-bold text-base tracking-tight text-text">GERAÇÃO</span>
+          <span className="font-bold text-base text-brand">A</span>
         </div>
-        <div>
-          <div className="text-sm font-medium leading-tight">Hub Admin</div>
-          <div className="text-2xs text-muted leading-tight">v0.1 · staging</div>
-        </div>
+        <div className="text-2xs text-muted mt-1 uppercase tracking-wider">Hub Admin</div>
       </div>
 
       <div className="px-4 pt-5 pb-2">
@@ -79,7 +77,7 @@ export function Sidebar({ email }: { email: string }) {
                 isActive ? "bg-surface2 text-text" : "text-text2 hover:bg-surface hover:text-text"
               }`}
             >
-              <span className={isActive ? "text-accent" : ""}>{it.icon}</span>
+              <span className={isActive ? "text-brand" : ""}>{it.icon}</span>
               {it.label}
             </Link>
           );

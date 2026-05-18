@@ -16,6 +16,8 @@ export default {
         muted: "#737373",
         accent: "#22c55e",
         accentDim: "#16a34a",
+        brand: "#ec2d7c",
+        brandDim: "#c91d65",
         info: "#3b82f6",
         warn: "#fbbf24",
         danger: "#ef4444",
