@@ -107,6 +107,27 @@ async function createDraftProduct(
   }
 }
 
+/**
+ * Normaliza telefone pra os últimos 11 dígitos (formato BR: DDD+9+8dig).
+ * Aceita "+55 (11) 91234-5678", "11912345678", "5511912345678" → "11912345678".
+ * Retorna null se phone não tem dígitos suficientes pra ser válido.
+ */
+function normalizePhone(phone?: string): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 8) return null;
+  return digits.slice(-11);
+}
+
+/**
+ * Localiza customer existente. Se não acha por email, tenta por telefone normalizado.
+ * Isso permite agregar compras de produtos diferentes ao MESMO cliente quando ele
+ * usa email diferente mas o mesmo número, ou vice-versa.
+ *
+ * Quando achado:
+ *  - enriquece o registro com name/phone que estavam faltando
+ *  - retorna o id existente (não cria duplicata)
+ */
 async function upsertCustomer(
   hub: SupabaseClient,
   email: string,
@@ -114,12 +135,57 @@ async function upsertCustomer(
   name?: string,
   phone?: string,
 ): Promise<string | null> {
-  const { data: existing } = await hub
+  const phoneNorm = normalizePhone(phone);
+
+  // 1. Match por email (caminho mais comum e mais barato — coluna única)
+  let { data: existing } = await hub
     .from("customers")
-    .select("id")
+    .select("id, email, name, phone")
     .eq("email", email)
     .maybeSingle();
-  if (existing) return existing.id as string;
+
+  // 2. Fallback: match por telefone normalizado
+  let matchedBy: "email" | "phone" | null = existing ? "email" : null;
+  if (!existing && phoneNorm) {
+    const { data: byPhone } = await hub
+      .from("customers")
+      .select("id, email, name, phone")
+      .eq("phone_normalized", phoneNorm)
+      .order("first_seen_at", { ascending: true })
+      .limit(1);
+    if (byPhone && byPhone.length > 0) {
+      existing = byPhone[0]!;
+      matchedBy = "phone";
+      await logEvent(hub, "customer.merged_by_phone", {
+        level: "info",
+        payload: {
+          existing_email: existing.email,
+          incoming_email: email,
+          phone_normalized: phoneNorm,
+          customer_id: existing.id,
+        },
+        customerId: existing.id as string,
+      });
+    }
+  }
+
+  // 3. Achou? Enriquece dados faltantes e devolve o id
+  if (existing) {
+    const updates: Record<string, unknown> = {};
+    if (!existing.name && name) updates.name = name;
+    if (!existing.phone && phone) updates.phone = phone;
+    if (Object.keys(updates).length > 0) {
+      await hub.from("customers").update(updates).eq("id", existing.id as string);
+    }
+    if (matchedBy === "phone") {
+      // Match por phone com email novo — mantemos o email original mas ficamos
+      // sabendo que esse cliente também usa esse outro email.
+      // (futuramente: tabela customer_emails pra histórico)
+    }
+    return existing.id as string;
+  }
+
+  // 4. Não achou nem por email nem por phone — cria novo
   const { data, error } = await hub
     .from("customers")
     .insert({ email, name: name ?? null, phone: phone ?? null, source })
