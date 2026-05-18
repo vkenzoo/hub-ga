@@ -56,6 +56,7 @@ function fmtDate(iso: string | null) {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: "America/Sao_Paulo",
   });
 }
 function fmtDateTime(iso: string) {
@@ -65,6 +66,7 @@ function fmtDateTime(iso: string) {
     year: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
   });
 }
 

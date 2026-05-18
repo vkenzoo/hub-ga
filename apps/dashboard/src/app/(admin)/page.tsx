@@ -367,6 +367,7 @@ export default async function Page({
                             month: "2-digit",
                             hour: "2-digit",
                             minute: "2-digit",
+                            timeZone: "America/Sao_Paulo",
                           })}
                         </div>
                       </div>
@@ -397,6 +398,7 @@ export default async function Page({
                       {new Date(e.created_at).toLocaleTimeString("pt-BR", {
                         hour: "2-digit",
                         minute: "2-digit",
+                        timeZone: "America/Sao_Paulo",
                       })}
                     </span>
                   </li>
