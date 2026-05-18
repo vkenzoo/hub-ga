@@ -34,6 +34,10 @@ export interface NormalizedPurchase {
   gatewayEventId: string;
   gatewayProductId: string;
   productNameHint?: string;
+  paymentMethod?: string;
+  gatewayOfferId?: string;
+  gatewayOfferName?: string;
+  gatewayFunnelName?: string;
   customer: { email: string; name?: string; phone?: string };
   amount: number;
   status: PurchaseStatus;
@@ -211,6 +215,10 @@ export async function recordPurchase(
       utm_content: p.utm?.content ?? null,
       utm_term: p.utm?.term ?? null,
       affiliate_id: p.affiliateId ?? null,
+      payment_method: p.paymentMethod ?? null,
+      gateway_offer_id: p.gatewayOfferId ?? null,
+      gateway_offer_name: p.gatewayOfferName ?? null,
+      gateway_funnel_name: p.gatewayFunnelName ?? null,
     })
     .select("id")
     .single();

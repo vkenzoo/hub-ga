@@ -10,18 +10,25 @@ interface SaleRow {
   gateway: string;
   gateway_event_id: string;
   created_at: string;
+  payment_method: string | null;
+  gateway_offer_id: string | null;
+  gateway_offer_name: string | null;
+  gateway_funnel_name: string | null;
   utm_source: string | null;
   utm_medium: string | null;
   utm_campaign: string | null;
   utm_content: string | null;
   utm_term: string | null;
   affiliate_id: string | null;
-  customers: { id: string; email: string; name: string | null } | null;
+  customers: { id: string; email: string; name: string | null; phone: string | null } | null;
   products: { id: string; name: string } | null;
 }
 
 // ── Configuração de colunas ─────────────────────────────────
 const OPTIONAL_COLUMNS = [
+  { key: "product", label: "Produto" },
+  { key: "gateway_funnel_name", label: "Funil" },
+  { key: "gateway_offer_name", label: "Oferta" },
   { key: "utm_source", label: "Origem" },
   { key: "utm_campaign", label: "Campanha" },
   { key: "affiliate_id", label: "Afiliado" },
@@ -37,18 +44,28 @@ type PresetKey = "essencial" | "marketing" | "tudo";
 const PRESETS: Record<PresetKey, { label: string; hint: string; cols: OptionalKey[] }> = {
   essencial: {
     label: "Essencial",
-    hint: "Sem UTMs — só cliente, produto e valor",
+    hint: "Só cliente, valor e pagamento",
     cols: [],
   },
   marketing: {
     label: "Marketing",
-    hint: "Origem, campanha e afiliado",
-    cols: ["utm_source", "utm_campaign", "affiliate_id"],
+    hint: "Produto, origem, campanha e afiliado",
+    cols: ["product", "utm_source", "utm_campaign", "affiliate_id"],
   },
   tudo: {
     label: "Tudo",
-    hint: "Todas as UTMs (debug)",
-    cols: ["utm_source", "utm_campaign", "affiliate_id", "utm_medium", "utm_content", "utm_term"],
+    hint: "Produto, funil, oferta e todas as UTMs",
+    cols: [
+      "product",
+      "gateway_funnel_name",
+      "gateway_offer_name",
+      "utm_source",
+      "utm_campaign",
+      "affiliate_id",
+      "utm_medium",
+      "utm_content",
+      "utm_term",
+    ],
   },
 };
 
@@ -73,7 +90,29 @@ function fmtDateTime(iso: string) {
     year: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
   });
+}
+
+const PAYMENT_LABELS: Record<string, string> = {
+  pix: "PIX",
+  PIX: "PIX",
+  credit: "Cartão",
+  CREDIT: "Cartão",
+  credit_card: "Cartão",
+  CREDIT_CARD: "Cartão",
+  CARD: "Cartão",
+  card: "Cartão",
+  boleto: "Boleto",
+  BOLETO: "Boleto",
+  BILLET: "Boleto",
+  debit: "Débito",
+  DEBIT: "Débito",
+};
+
+function paymentLabel(m: string | null): string {
+  if (!m) return "—";
+  return PAYMENT_LABELS[m] ?? m;
 }
 function statusChip(status: string) {
   if (status === "paid") return { dot: "bg-accent", label: "Pago" };
@@ -99,8 +138,9 @@ async function listSales(filters: {
     .from("purchases")
     .select(
       `id, amount, status, gateway, gateway_event_id, created_at,
+       payment_method, gateway_offer_id, gateway_offer_name, gateway_funnel_name,
        utm_source, utm_medium, utm_campaign, utm_content, utm_term, affiliate_id,
-       customers(id, email, name),
+       customers(id, email, name, phone),
        products(id, name)`,
     )
     .order("created_at", { ascending: false })
@@ -227,14 +267,14 @@ export default async function Page({
                 <thead className="text-2xs uppercase tracking-wider text-muted border-b border-line bg-surface2/30">
                   <tr>
                     <th className="text-left font-medium px-4 py-2.5">Cliente</th>
-                    <th className="text-left font-medium px-4 py-2.5">Produto</th>
-                    <th className="text-left font-medium px-4 py-2.5 w-20">Gateway</th>
                     <th className="text-right font-medium px-4 py-2.5 w-28">Valor</th>
                     <th className="text-left font-medium px-4 py-2.5 w-24">Status</th>
+                    <th className="text-left font-medium px-4 py-2.5 w-20">Gateway</th>
+                    <th className="text-left font-medium px-4 py-2.5 w-24">Pagamento</th>
                     {OPTIONAL_COLUMNS.map(
                       (c) =>
                         colsSet.has(c.key) && (
-                          <th key={c.key} className="text-left font-medium px-4 py-2.5 font-mono normal-case">
+                          <th key={c.key} className="text-left font-medium px-4 py-2.5">
                             {c.label}
                           </th>
                         ),
@@ -251,22 +291,22 @@ export default async function Page({
                           {s.customers ? (
                             <Link
                               href={`/customers/${s.customers.id}`}
-                              className="block hover:text-accent transition"
+                              className="block hover:text-brand transition"
+                              title="Abrir card do cliente"
                             >
-                              <div>{s.customers.email}</div>
                               {s.customers.name && (
-                                <div className="text-xs text-muted">{s.customers.name}</div>
+                                <div className="text-text">{s.customers.name}</div>
+                              )}
+                              <div className={s.customers.name ? "text-xs text-muted" : ""}>
+                                {s.customers.email}
+                              </div>
+                              {s.customers.phone && (
+                                <div className="text-xs text-muted tabular-nums">{s.customers.phone}</div>
                               )}
                             </Link>
                           ) : (
                             <span className="text-muted">—</span>
                           )}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {s.products?.name ?? <span className="text-muted">—</span>}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span className="chip text-2xs uppercase">{s.gateway}</span>
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums">
                           {fmtMoney(s.amount)}
@@ -276,11 +316,31 @@ export default async function Page({
                             <span className={`dot ${stChip.dot}`} /> {stChip.label}
                           </span>
                         </td>
+                        <td className="px-4 py-2.5">
+                          <span className="chip text-2xs uppercase">{s.gateway}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-xs">
+                          {s.payment_method ? (
+                            <span className="text-text2">{paymentLabel(s.payment_method)}</span>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </td>
                         {OPTIONAL_COLUMNS.map((c) => {
                           if (!colsSet.has(c.key)) return null;
-                          const value = s[c.key as keyof SaleRow] as string | null;
+                          let value: string | null = null;
+                          if (c.key === "product") value = s.products?.name ?? null;
+                          else value = (s[c.key as keyof SaleRow] as string | null) ?? null;
+                          const isMono =
+                            c.key === "affiliate_id" ||
+                            c.key.startsWith("utm_") ||
+                            c.key === "gateway_offer_name" ||
+                            c.key === "gateway_funnel_name";
                           return (
-                            <td key={c.key} className="px-4 py-2.5 font-mono text-xs">
+                            <td
+                              key={c.key}
+                              className={`px-4 py-2.5 text-xs ${isMono ? "font-mono" : ""}`}
+                            >
                               {value ? (
                                 <span className="text-text2">{value}</span>
                               ) : (

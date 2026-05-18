@@ -49,13 +49,32 @@ function clientName(c: NonNullable<AssinyEvent["client"]>): string | undefined {
 }
 
 function extractAmount(e: AssinyEvent): number {
-  const raw = e.transaction?.amount ?? e.data.offer?.amount ?? 0;
+  const raw =
+    e.data.transaction?.amount ??
+    e.transaction?.amount ??
+    e.data.offer?.amount ??
+    0;
   const n = typeof raw === "string" ? Number(raw) : raw;
   return Number.isFinite(n) ? Number(n) : 0;
 }
 
+// Conforme doc da Assiny, transaction/metadata/client ficam dentro de data.
+// Eventos de teste antigos vinham top-level. Lemos dos dois com fallback.
+function txOf(event: AssinyEvent) {
+  return event.data.transaction ?? event.transaction;
+}
+function metaOf(event: AssinyEvent) {
+  return event.data.metadata ?? event.metadata;
+}
+function clientOf(event: AssinyEvent) {
+  return event.data.client ?? event.client;
+}
+
 export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent) {
-  let kind = classifyAssinyEvent(event.event, event.transaction?.status);
+  const tx = txOf(event);
+  const meta = metaOf(event);
+  const client = clientOf(event);
+  let kind = classifyAssinyEvent(event.event, tx?.status);
 
   // Heurística: approved_purchase com subscription.cycle > 1 OU is_subscription_renew=true → renovação
   const isRenewal =
@@ -73,7 +92,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
     payload: {
       gateway: "assiny",
       raw_event_type: event.event,
-      raw_status: event.transaction?.status ?? null,
+      raw_status: tx?.status ?? null,
       classified_as: kind,
       subscription_cycle: event.data.subscription?.cycle ?? null,
       is_renew: isRenewal,
@@ -86,7 +105,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
   }
 
   // Test events do Assiny podem vir sem client real (sem email)
-  if (!event.client?.email) {
+  if (!client || !client.email) {
     await logEvent(hub, "webhook.test_event_no_client", {
       level: "info",
       payload: { gateway: "assiny", event: event.event },
@@ -117,8 +136,8 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
     return { skipped: true as const, reason: "missing_product_id" };
   }
 
-  const m = event.metadata ?? {};
-  // UTMs podem vir top-level (utm_source, utm_medium...) ou em url_parameters
+  const m = meta ?? {};
+  // UTMs podem vir top-level no metadata ou em url_parameters
   const urlParams = (m.url_parameters ?? {}) as Record<string, string>;
   const utm = {
     source: m.utm_source ?? urlParams.utm_source,
@@ -129,7 +148,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
   };
 
   // Affiliate — 1ª commission user_id
-  const aff = event.transaction?.commissions?.[0];
+  const aff = tx?.commissions?.[0];
   let affiliateId: string | undefined;
   if (aff?.user) {
     if (typeof aff.user === "string" || typeof aff.user === "number") {
@@ -140,16 +159,25 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
   }
   if (!affiliateId && aff?.email) affiliateId = aff.email;
 
+  // Funil: a Assiny envia metadata.short_funnel_id (ex: "hncFVu") e metadata.funnel_id (uuid).
+  // O short_funnel_id é o que aparece na URL do admin (/node/hncFVu), mais reconhecível.
+  // O nome amigável ("[SGVA] - F01") só existe no admin — pode ser mapeado depois via tabela.
+  const funnelRef = m.short_funnel_id ?? m.funnel_id;
+
   const normalized: NormalizedPurchase = {
     gateway: "assiny",
     eventKind: kind,
     gatewayEventId,
     gatewayProductId: productGwId,
     productNameHint: event.data.offer?.product?.name ?? event.data.offer?.name,
+    paymentMethod: tx?.payment_type ?? undefined,
+    gatewayOfferId: event.data.offer?.id ?? undefined,
+    gatewayOfferName: event.data.offer?.name ?? undefined,
+    gatewayFunnelName: funnelRef?.trim() || undefined,
     customer: {
-      email: event.client.email,
-      name: clientName(event.client),
-      phone: event.client.phone,
+      email: client.email,
+      name: clientName(client),
+      phone: client.phone,
     },
     amount: extractAmount(event),
     status: mapPurchaseStatus(kind),

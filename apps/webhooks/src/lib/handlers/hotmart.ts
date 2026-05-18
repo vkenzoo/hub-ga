@@ -94,12 +94,16 @@ export async function handleHotmartEvent(hub: SupabaseClient, event: HotmartEven
   const tracking = d.purchase.tracking ?? {};
   const affiliateCode = d.affiliates?.[0]?.affiliate_code;
 
+  const purchaseAny = d.purchase as Record<string, unknown>;
+  const paymentObj = purchaseAny.payment as { type?: string; method?: string } | undefined;
+
   const normalized: NormalizedPurchase = {
     gateway: "hotmart",
     eventKind: kind,
     gatewayEventId: event.id,
     gatewayProductId: d.product.id,
     productNameHint: d.product.name,
+    paymentMethod: paymentObj?.type ?? paymentObj?.method ?? undefined,
     customer: {
       email: d.buyer.email,
       name: d.buyer.name,

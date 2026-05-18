@@ -30,6 +30,13 @@ export const hotmartEventSchema = z
               })
               .passthrough()
               .optional(),
+            payment: z
+              .object({
+                type: z.string().optional(),
+                method: z.string().optional(),
+              })
+              .passthrough()
+              .optional(),
             tracking: z
               .object({
                 source: z.string().optional(),

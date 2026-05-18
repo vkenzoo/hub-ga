@@ -84,12 +84,17 @@ const assinyMetadataSchema = z
     utm_campaign: z.string().optional(),
     utm_content: z.string().optional(),
     utm_term: z.string().optional(),
+    funnel_id: z.string().optional(),
+    short_funnel_id: z.string().optional(),
+    node_id: z.string().optional(),
     ip: z.string().optional(),
     user_agent: z.string().optional(),
     url_parameters: z.record(z.unknown()).optional(),
   })
   .passthrough();
 
+// Schema flexível: aceita transaction/metadata tanto em data.* quanto no top-level.
+// Eventos de teste vinham top-level; eventos reais (conforme doc) vêm dentro de data.
 export const assinyEventSchema = z
   .object({
     event: z.string().min(1),
@@ -98,6 +103,9 @@ export const assinyEventSchema = z
         offer: assinyOfferSchema.optional(),
         subscription: assinySubscriptionSchema.optional(),
         order_bumps: z.array(z.unknown()).optional(),
+        transaction: assinyTransactionSchema.optional(),
+        metadata: assinyMetadataSchema.optional(),
+        client: assinyClientSchema.optional(),
       })
       .passthrough(),
     transaction: assinyTransactionSchema.optional(),
