@@ -11,7 +11,8 @@ export type Section =
   | "systems"
   | "products"
   | "webhooks"
-  | "executions";
+  | "executions"
+  | "connections";
 
 export const ALL_SECTIONS: Section[] = [
   "home",
@@ -22,6 +23,7 @@ export const ALL_SECTIONS: Section[] = [
   "products",
   "webhooks",
   "executions",
+  "connections",
 ];
 
 export const SECTION_LABEL: Record<Section, string> = {
@@ -33,6 +35,7 @@ export const SECTION_LABEL: Record<Section, string> = {
   products: "Produtos",
   webhooks: "Webhooks",
   executions: "Executions",
+  connections: "Conexões",
 };
 
 const SECTION_PATH: Record<Section, string> = {
@@ -44,6 +47,7 @@ const SECTION_PATH: Record<Section, string> = {
   products: "/products",
   webhooks: "/webhooks",
   executions: "/executions",
+  connections: "/connections",
 };
 
 /**

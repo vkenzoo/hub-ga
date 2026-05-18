@@ -43,6 +43,9 @@ const I = {
   audit: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h6"/><path d="M22 12h-6"/><path d="M12 2v6"/><path d="M12 22v-6"/><path d="M20 16l-4-4 4-4"/><path d="M4 8l4 4-4 4"/><path d="M16 4l-4 4-4-4"/><path d="M8 20l4-4 4 4"/></svg>
   ),
+  connections: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11V7a3 3 0 0 1 6 0v4"/><path d="M5 11h14v10H5z"/><path d="M12 16v2"/></svg>
+  ),
 };
 
 type Section =
@@ -53,7 +56,8 @@ type Section =
   | "systems"
   | "products"
   | "webhooks"
-  | "executions";
+  | "executions"
+  | "connections";
 
 interface ItemWithRole extends Item {
   section?: Section;
@@ -68,6 +72,7 @@ const ITEMS: ItemWithRole[] = [
   { href: "/systems", label: "Sistemas", icon: I.systems, section: "systems" },
   { href: "/products", label: "Produtos", icon: I.products, section: "products" },
   { href: "/webhooks", label: "Webhooks", icon: I.webhooks, section: "webhooks" },
+  { href: "/connections", label: "Conexões", icon: I.connections, section: "connections" },
   { href: "/executions", label: "Executions", icon: I.executions, section: "executions" },
   { href: "/team", label: "Equipe", icon: I.team, superAdminOnly: true },
   { href: "/audit", label: "Auditoria", icon: I.audit, superAdminOnly: true },
