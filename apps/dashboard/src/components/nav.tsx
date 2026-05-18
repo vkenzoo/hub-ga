@@ -54,8 +54,18 @@ function isActiveLink(href: string, pathname: string): boolean {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-export function Sidebar({ email }: { email: string }) {
+export function Sidebar({
+  email,
+  name,
+  avatarUrl,
+}: {
+  email: string;
+  name?: string | null;
+  avatarUrl?: string | null;
+}) {
   const pathname = usePathname() ?? "/";
+  const displayName = name?.trim() || email.split("@")[0] || email;
+  const isProfileActive = pathname === "/profile";
 
   return (
     <aside className="w-60 shrink-0 border-r border-line bg-surface/40 flex flex-col h-screen sticky top-0">
@@ -94,16 +104,33 @@ export function Sidebar({ email }: { email: string }) {
       </nav>
 
       <div className="mt-auto border-t border-line p-3">
-        <div className="flex items-center gap-2.5 px-1.5 py-1">
-          <div className="w-7 h-7 rounded-full bg-surface2 border border-line grid place-items-center text-xs text-text2">
-            {email[0]?.toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm text-text truncate" title={email}>
-              {email.split("@")[0]}
+        <div className="flex items-center gap-2 px-1 py-1">
+          <Link
+            href="/profile"
+            className={`flex items-center gap-2.5 flex-1 min-w-0 rounded-md p-1 transition ${
+              isProfileActive ? "bg-surface2" : "hover:bg-surface2"
+            }`}
+            title="Editar perfil"
+          >
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt={displayName}
+                className="w-7 h-7 rounded-full object-cover border border-line"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-surface2 border border-line grid place-items-center text-xs text-text2">
+                {displayName[0]?.toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="text-sm text-text truncate" title={email}>
+                {displayName}
+              </div>
+              <div className="text-2xs text-muted uppercase tracking-wider">Admin</div>
             </div>
-            <div className="text-2xs text-muted uppercase tracking-wider">Admin</div>
-          </div>
+          </Link>
           <form action={signOut}>
             <button
               title="Sair"

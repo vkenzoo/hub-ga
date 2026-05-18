@@ -400,11 +400,6 @@ export default async function Page({
           </div>
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <QuickLink href="/systems" title="Sistemas" hint="3 cadastrados" />
-          <QuickLink href="/products" title="Produtos" hint={`${counts.products} no catálogo`} />
-          <QuickLink href="/webhooks" title="Webhooks" hint="URLs + auditoria" />
-        </section>
       </PageBody>
     </>
   );
@@ -412,19 +407,4 @@ export default async function Page({
 
 function Empty({ msg }: { msg: string }) {
   return <div className="px-4 py-8 text-sm text-muted">{msg}</div>;
-}
-
-function QuickLink({ href, title, hint }: { href: string; title: string; hint: string }) {
-  return (
-    <Link
-      href={href}
-      className="card p-4 hover:border-line2 hover:bg-surface2 transition flex items-center justify-between"
-    >
-      <div>
-        <div className="text-sm font-medium">{title}</div>
-        <div className="text-xs text-muted mt-0.5">{hint}</div>
-      </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted"><path d="m9 18 6-6-6-6"/></svg>
-    </Link>
-  );
 }

@@ -18,5 +18,14 @@ export async function requireAdmin() {
 
   if (!data) redirect("/login?error=not_admin");
 
-  return { user, email: user.email };
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const name = typeof meta.name === "string" ? meta.name : null;
+  const avatarUrl = typeof meta.avatar_url === "string" ? meta.avatar_url : null;
+
+  return {
+    user,
+    email: user.email,
+    name,
+    avatarUrl,
+  };
 }
