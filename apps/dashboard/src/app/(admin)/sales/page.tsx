@@ -22,17 +22,46 @@ interface SaleRow {
 
 // ── Configuração de colunas ─────────────────────────────────
 const OPTIONAL_COLUMNS = [
-  { key: "utm_source", label: "utm_source" },
-  { key: "utm_medium", label: "utm_medium" },
-  { key: "utm_campaign", label: "utm_campaign" },
-  { key: "utm_content", label: "utm_content" },
-  { key: "utm_term", label: "utm_term" },
-  { key: "affiliate_id", label: "affiliate" },
+  { key: "utm_source", label: "Origem" },
+  { key: "utm_campaign", label: "Campanha" },
+  { key: "affiliate_id", label: "Afiliado" },
+  { key: "utm_medium", label: "Mídia" },
+  { key: "utm_content", label: "Anúncio" },
+  { key: "utm_term", label: "Termo" },
 ] as const;
 
 type OptionalKey = (typeof OPTIONAL_COLUMNS)[number]["key"];
 
-const DEFAULT_COLS: OptionalKey[] = ["utm_source", "utm_campaign", "affiliate_id"];
+type PresetKey = "essencial" | "marketing" | "tudo";
+
+const PRESETS: Record<PresetKey, { label: string; hint: string; cols: OptionalKey[] }> = {
+  essencial: {
+    label: "Essencial",
+    hint: "Sem UTMs — só cliente, produto e valor",
+    cols: [],
+  },
+  marketing: {
+    label: "Marketing",
+    hint: "Origem, campanha e afiliado",
+    cols: ["utm_source", "utm_campaign", "affiliate_id"],
+  },
+  tudo: {
+    label: "Tudo",
+    hint: "Todas as UTMs (debug)",
+    cols: ["utm_source", "utm_campaign", "affiliate_id", "utm_medium", "utm_content", "utm_term"],
+  },
+};
+
+const DEFAULT_PRESET: PresetKey = "marketing";
+const DEFAULT_COLS: OptionalKey[] = PRESETS[DEFAULT_PRESET].cols;
+
+function matchPreset(cols: OptionalKey[]): PresetKey | null {
+  const sig = [...cols].sort().join(",");
+  for (const [k, p] of Object.entries(PRESETS) as Array<[PresetKey, (typeof PRESETS)[PresetKey]]>) {
+    if ([...p.cols].sort().join(",") === sig) return k;
+  }
+  return null;
+}
 
 function fmtMoney(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -284,38 +313,76 @@ function ColumnsToggle({
   current: OptionalKey[];
   filters: { q?: string; gateway?: string; status?: string };
 }) {
-  const set = new Set<string>(current);
-  return (
-    <details className="card group">
-      <summary className="cursor-pointer list-none px-4 py-2.5 flex items-center justify-between text-sm hover:bg-surface2 transition">
-        <span className="flex items-center gap-2">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
-          <span>Colunas — {current.length} ativa{current.length === 1 ? "" : "s"}</span>
-        </span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted transition group-open:rotate-90"><path d="m9 18 6-6-6-6"/></svg>
-      </summary>
-      <form className="p-4 border-t border-line bg-surface2/40 flex flex-wrap items-end gap-3">
-        {/* Preserva filtros atuais */}
-        {filters.q && <input type="hidden" name="q" value={filters.q} />}
-        {filters.gateway && <input type="hidden" name="gateway" value={filters.gateway} />}
-        {filters.status && <input type="hidden" name="status" value={filters.status} />}
+  const activePreset = matchPreset(current);
+  const baseParams = new URLSearchParams();
+  if (filters.q) baseParams.set("q", filters.q);
+  if (filters.gateway) baseParams.set("gateway", filters.gateway);
+  if (filters.status) baseParams.set("status", filters.status);
 
-        <div className="flex flex-wrap gap-3 flex-1">
-          {OPTIONAL_COLUMNS.map((c) => (
-            <label key={c.key} className="flex items-center gap-2 text-sm font-mono">
-              <input
-                type="checkbox"
-                name="cols"
-                value={c.key}
-                defaultChecked={set.has(c.key)}
-                className="rounded border-line bg-surface text-accent focus:ring-accent/40 focus:ring-offset-0"
-              />
-              {c.label}
-            </label>
-          ))}
-        </div>
-        <button className="btn btn-sm">Aplicar</button>
-      </form>
-    </details>
+  function presetHref(p: PresetKey): string {
+    const params = new URLSearchParams(baseParams);
+    for (const c of PRESETS[p].cols) params.append("cols", c);
+    const qs = params.toString();
+    return `/sales${qs ? "?" + qs : ""}`;
+  }
+
+  const set = new Set<string>(current);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="label">Colunas:</span>
+      {(Object.keys(PRESETS) as PresetKey[]).map((p) => {
+        const isActive = activePreset === p;
+        return (
+          <Link
+            key={p}
+            href={presetHref(p)}
+            title={PRESETS[p].hint}
+            className={`btn btn-sm ${isActive ? "btn-primary" : "btn-ghost"}`}
+          >
+            {PRESETS[p].label}
+          </Link>
+        );
+      })}
+
+      <details className="relative">
+        <summary
+          className={`btn btn-sm btn-ghost list-none cursor-pointer ${
+            !activePreset ? "border-brand/40 text-brand" : ""
+          }`}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Personalizar
+          {!activePreset && (
+            <span className="text-2xs">({current.length})</span>
+          )}
+        </summary>
+        <form className="absolute right-0 top-full mt-1 w-72 card p-3 z-10 shadow-lg">
+          {filters.q && <input type="hidden" name="q" value={filters.q} />}
+          {filters.gateway && <input type="hidden" name="gateway" value={filters.gateway} />}
+          {filters.status && <input type="hidden" name="status" value={filters.status} />}
+          <div className="label mb-2">Mostrar colunas</div>
+          <div className="space-y-1.5 mb-3">
+            {OPTIONAL_COLUMNS.map((c) => (
+              <label
+                key={c.key}
+                className="flex items-center gap-2 text-sm py-1 cursor-pointer hover:bg-surface2 -mx-1 px-1 rounded"
+              >
+                <input
+                  type="checkbox"
+                  name="cols"
+                  value={c.key}
+                  defaultChecked={set.has(c.key)}
+                  className="rounded border-line bg-surface text-brand focus:ring-brand/40 focus:ring-offset-0"
+                />
+                <span>{c.label}</span>
+                <span className="text-2xs text-muted font-mono ml-auto">{c.key}</span>
+              </label>
+            ))}
+          </div>
+          <button className="btn btn-sm btn-primary w-full">Aplicar</button>
+        </form>
+      </details>
+    </div>
   );
 }
