@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { signInWithPassword } from "./actions";
 
 export default async function LoginPage({
@@ -11,11 +12,15 @@ export default async function LoginPage({
     <main className="min-h-screen grid place-items-center px-6">
       <div className="w-full max-w-sm">
         <div className="mb-10">
-          <div className="flex items-baseline gap-0.5 leading-none">
-            <span className="font-bold text-xl tracking-tight text-text">GERAÇÃO</span>
-            <span className="font-bold text-xl text-brand">A</span>
-          </div>
-          <div className="text-2xs text-muted mt-1 uppercase tracking-wider">Hub Admin</div>
+          <Image
+            src="/logo.png"
+            alt="Geração A"
+            width={200}
+            height={40}
+            priority
+            className="h-9 w-auto"
+          />
+          <div className="text-2xs text-muted mt-2 uppercase tracking-wider">Hub Admin</div>
         </div>
 
         <h1 className="text-xl font-medium mb-1">Entrar</h1>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/app/login/actions";
 
@@ -55,11 +56,15 @@ export function Sidebar({ email }: { email: string }) {
   return (
     <aside className="w-60 shrink-0 border-r border-line bg-surface/40 flex flex-col h-screen sticky top-0">
       <div className="px-4 py-4 border-b border-line">
-        <div className="flex items-baseline gap-0.5 leading-none">
-          <span className="font-bold text-base tracking-tight text-text">GERAÇÃO</span>
-          <span className="font-bold text-base text-brand">A</span>
-        </div>
-        <div className="text-2xs text-muted mt-1 uppercase tracking-wider">Hub Admin</div>
+        <Image
+          src="/logo.png"
+          alt="Geração A"
+          width={200}
+          height={40}
+          priority
+          className="h-6 w-auto"
+        />
+        <div className="text-2xs text-muted mt-2 uppercase tracking-wider">Hub Admin</div>
       </div>
 
       <div className="px-4 pt-5 pb-2">
