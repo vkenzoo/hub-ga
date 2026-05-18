@@ -104,6 +104,8 @@ export async function handleHotmartEvent(hub: SupabaseClient, event: HotmartEven
     gatewayProductId: d.product.id,
     productNameHint: d.product.name,
     paymentMethod: paymentObj?.type ?? paymentObj?.method ?? undefined,
+    // Hotmart não envia número do ciclo explícito — quando é renovação inferimos cycle>=2.
+    subscriptionCycle: kind === "subscription_renewed" ? 2 : kind === "purchase_paid" ? 1 : undefined,
     customer: {
       email: d.buyer.email,
       name: d.buyer.name,

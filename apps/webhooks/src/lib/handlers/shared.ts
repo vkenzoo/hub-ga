@@ -38,6 +38,7 @@ export interface NormalizedPurchase {
   gatewayOfferId?: string;
   gatewayOfferName?: string;
   gatewayFunnelName?: string;
+  subscriptionCycle?: number;
   customer: { email: string; name?: string; phone?: string };
   amount: number;
   status: PurchaseStatus;
@@ -285,6 +286,7 @@ export async function recordPurchase(
       gateway_offer_id: p.gatewayOfferId ?? null,
       gateway_offer_name: p.gatewayOfferName ?? null,
       gateway_funnel_name: p.gatewayFunnelName ?? null,
+      subscription_cycle: p.subscriptionCycle ?? null,
     })
     .select("id")
     .single();

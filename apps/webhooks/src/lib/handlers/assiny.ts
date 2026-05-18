@@ -174,6 +174,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
     gatewayOfferId: event.data.offer?.id ?? undefined,
     gatewayOfferName: event.data.offer?.name ?? undefined,
     gatewayFunnelName: funnelRef?.trim() || undefined,
+    subscriptionCycle: event.data.subscription?.cycle ?? undefined,
     customer: {
       email: client.email,
       name: clientName(client),
