@@ -9,53 +9,79 @@ interface EventRow {
   created_at: string;
 }
 
-type Period = "today" | "7d" | "30d" | "month" | "all";
+type Period = "today" | "7d" | "30d" | "month" | "all" | "custom";
 
 const PERIOD_LABEL: Record<Period, string> = {
   today: "Hoje",
-  "7d": "Últimos 7 dias",
-  "30d": "Últimos 30 dias",
-  month: "Este mês",
-  all: "Todo período",
+  "7d": "7d",
+  "30d": "30d",
+  month: "Mês",
+  all: "Tudo",
+  custom: "Personalizado",
 };
+
+const BRT_OFFSET_MIN = 180; // BRT = UTC-3
+
+/** Converte um "YYYY-MM-DD" em data UTC representando meia-noite em BRT. */
+function brtMidnightFromDateString(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const d = Number(m[3]);
+  // 00:00 BRT = 03:00 UTC do mesmo dia
+  return new Date(Date.UTC(y, mo, d, 3, 0, 0));
+}
 
 /**
  * Início do range em America/Sao_Paulo (UTC-3) pra um período dado.
  * Retorna null pra "all" (sem filtro).
  */
-function periodStart(p: Period): Date | null {
-  const offsetMin = 180; // BRT = UTC-3
-  const nowLocalMs = Date.now() - offsetMin * 60_000;
+function periodStart(p: Period, from?: string): Date | null {
+  if (p === "custom") {
+    return from ? brtMidnightFromDateString(from) : null;
+  }
+  if (p === "all") return null;
+
+  const nowLocalMs = Date.now() - BRT_OFFSET_MIN * 60_000;
   const local = new Date(nowLocalMs);
   local.setUTCHours(0, 0, 0, 0); // meia-noite "local"
 
-  if (p === "today") {
-    return new Date(local.getTime() + offsetMin * 60_000);
-  }
-  if (p === "7d") {
-    local.setUTCDate(local.getUTCDate() - 6);
-    return new Date(local.getTime() + offsetMin * 60_000);
-  }
-  if (p === "30d") {
-    local.setUTCDate(local.getUTCDate() - 29);
-    return new Date(local.getTime() + offsetMin * 60_000);
-  }
-  if (p === "month") {
-    local.setUTCDate(1);
-    return new Date(local.getTime() + offsetMin * 60_000);
-  }
-  return null;
+  if (p === "7d") local.setUTCDate(local.getUTCDate() - 6);
+  else if (p === "30d") local.setUTCDate(local.getUTCDate() - 29);
+  else if (p === "month") local.setUTCDate(1);
+  // "today" → mantém a meia-noite local
+  return new Date(local.getTime() + BRT_OFFSET_MIN * 60_000);
+}
+
+/** Fim do range. Pra custom usa `to` (inclusivo, fim do dia em BRT). */
+function periodEnd(p: Period, to?: string): Date | null {
+  if (p !== "custom") return null;
+  if (!to) return null;
+  const start = brtMidnightFromDateString(to);
+  if (!start) return null;
+  // +1 dia (exclusivo) pra incluir todo o dia "to"
+  return new Date(start.getTime() + 24 * 60 * 60_000);
 }
 
 function parsePeriod(raw: string | undefined): Period {
-  if (raw === "7d" || raw === "30d" || raw === "month" || raw === "all") return raw;
+  if (raw === "7d" || raw === "30d" || raw === "month" || raw === "all" || raw === "custom") return raw;
   return "today";
 }
 
-async function getOverview(period: Period) {
+function fmtDateLabel(s: string | undefined): string | null {
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  return `${m[3]}/${m[2]}`;
+}
+
+async function getOverview(period: Period, from?: string, to?: string) {
   const sb = createSupabaseAdmin();
-  const start = periodStart(period);
+  const start = periodStart(period, from);
+  const end = periodEnd(period, to);
   const startISO = start?.toISOString();
+  const endISO = end?.toISOString();
 
   // Stats de domínio (contagens)
   const [
@@ -86,9 +112,11 @@ async function getOverview(period: Period) {
   }>;
 
   // Filtro por período em JS sobre os mesmos dados
-  const inPeriod = startISO
-    ? paid.filter((p) => p.created_at >= startISO)
-    : paid;
+  const inPeriod = paid.filter((p) => {
+    if (startISO && p.created_at < startISO) return false;
+    if (endISO && p.created_at >= endISO) return false;
+    return true;
+  });
 
   const totalRevenue = paid.reduce((s, p) => s + Number(p.amount), 0);
   const periodRevenue = inPeriod.reduce((s, p) => s + Number(p.amount), 0);
@@ -99,11 +127,11 @@ async function getOverview(period: Period) {
 
   // Novos alunos no período = customers com first_seen_at dentro do range
   let newStudents = customersCount ?? 0;
-  if (startISO) {
-    const { count } = await sb
-      .from("customers")
-      .select("*", { count: "exact", head: true })
-      .gte("first_seen_at", startISO);
+  if (startISO || endISO) {
+    let q = sb.from("customers").select("*", { count: "exact", head: true });
+    if (startISO) q = q.gte("first_seen_at", startISO);
+    if (endISO) q = q.lt("first_seen_at", endISO);
+    const { count } = await q;
     newStudents = count ?? 0;
   }
 
@@ -167,12 +195,20 @@ function statusChip(status: string) {
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; from?: string; to?: string }>;
 }) {
   const sp = await searchParams;
   const period = parsePeriod(sp.period);
-  const { counts, metrics, events, purchases } = await getOverview(period);
-  const periodLabel = PERIOD_LABEL[period];
+  const from = sp.from;
+  const to = sp.to;
+  const { counts, metrics, events, purchases } = await getOverview(period, from, to);
+
+  const customLabel =
+    period === "custom"
+      ? [fmtDateLabel(from), fmtDateLabel(to)].filter(Boolean).join(" – ") || "Personalizado"
+      : "Personalizado";
+
+  const periodLabel = period === "custom" ? customLabel : PERIOD_LABEL[period];
 
   const periods: Period[] = ["today", "7d", "30d", "month", "all"];
 
@@ -189,18 +225,60 @@ export default async function Page({
       />
 
       <PageBody>
-        {/* Filtro de período */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="label">Período:</span>
-          {periods.map((p) => (
-            <Link
-              key={p}
-              href={p === "today" ? "/" : `/?period=${p}`}
-              className={`btn btn-sm ${period === p ? "btn-primary" : "btn-ghost"}`}
+        {/* Filtro de período — compacto */}
+        <div className="flex flex-wrap items-center gap-1 text-xs">
+          {periods.map((p) => {
+            const isActive = period === p;
+            return (
+              <Link
+                key={p}
+                href={p === "today" ? "/" : `/?period=${p}`}
+                className={`px-2.5 py-1 rounded transition ${
+                  isActive
+                    ? "bg-brand text-text"
+                    : "text-text2 hover:bg-surface2 hover:text-text"
+                }`}
+              >
+                {PERIOD_LABEL[p]}
+              </Link>
+            );
+          })}
+          <details className="relative">
+            <summary
+              className={`list-none cursor-pointer px-2.5 py-1 rounded transition flex items-center gap-1.5 ${
+                period === "custom"
+                  ? "bg-brand text-text"
+                  : "text-text2 hover:bg-surface2 hover:text-text"
+              }`}
             >
-              {PERIOD_LABEL[p]}
-            </Link>
-          ))}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+              {period === "custom" ? customLabel : "Personalizado"}
+            </summary>
+            <form className="absolute left-0 top-full mt-1 card p-3 z-10 shadow-lg w-64">
+              <input type="hidden" name="period" value="custom" />
+              <label className="block mb-2">
+                <span className="label block mb-1">De</span>
+                <input
+                  type="date"
+                  name="from"
+                  defaultValue={from ?? ""}
+                  required
+                  className="input"
+                />
+              </label>
+              <label className="block mb-3">
+                <span className="label block mb-1">Até</span>
+                <input
+                  type="date"
+                  name="to"
+                  defaultValue={to ?? ""}
+                  required
+                  className="input"
+                />
+              </label>
+              <button className="btn btn-sm btn-primary w-full">Aplicar</button>
+            </form>
+          </details>
         </div>
 
         {/* Métricas-chave */}
