@@ -47,8 +47,15 @@ function periodEnd(p: Period, to?: string): Date | null {
 }
 
 function parsePeriod(raw: string | undefined): Period {
-  if (raw === "7d" || raw === "30d" || raw === "month" || raw === "all" || raw === "custom") return raw;
+  if (raw === "today" || raw === "7d" || raw === "30d" || raw === "month" || raw === "all" || raw === "custom") return raw;
   return "30d";
+}
+
+function fmtDateLabel(s: string | undefined): string | null {
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  return `${m[3]}/${m[2]}`;
 }
 
 function fmtMoney(n: number): string {
@@ -229,6 +236,10 @@ export default async function Page({
 
   // ── Chip selector de período ─────────────────────────────
   const periods: Period[] = ["today", "7d", "30d", "month", "all"];
+  const customLabel =
+    period === "custom"
+      ? [fmtDateLabel(sp.from), fmtDateLabel(sp.to)].filter(Boolean).join(" – ") || "Personalizado"
+      : "Personalizado";
 
   return (
     <>
@@ -237,19 +248,58 @@ export default async function Page({
         subtitle="Faturamento, margem, reembolsos e métricas por canal."
       />
       <PageBody>
-        {/* Filtro de período */}
+        {/* Filtro de período — compacto */}
         <div className="flex flex-wrap items-center gap-1 text-xs">
-          {periods.map((p) => (
-            <Link
-              key={p}
-              href={p === "30d" ? "/acquisition" : `/acquisition?period=${p}`}
-              className={`px-2.5 py-1 rounded transition ${
-                period === p ? "bg-brand text-text" : "text-text2 hover:bg-surface2 hover:text-text"
+          {periods.map((p) => {
+            const isActive = period === p;
+            return (
+              <Link
+                key={p}
+                href={p === "30d" ? "/acquisition" : `/acquisition?period=${p}`}
+                className={`px-2.5 py-1 rounded transition ${
+                  isActive ? "bg-brand text-text" : "text-text2 hover:bg-surface2 hover:text-text"
+                }`}
+              >
+                {PERIOD_LABEL[p]}
+              </Link>
+            );
+          })}
+          <details className="relative">
+            <summary
+              className={`list-none cursor-pointer px-2.5 py-1 rounded transition flex items-center gap-1.5 ${
+                period === "custom"
+                  ? "bg-brand text-text"
+                  : "text-text2 hover:bg-surface2 hover:text-text"
               }`}
             >
-              {PERIOD_LABEL[p]}
-            </Link>
-          ))}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+              {period === "custom" ? customLabel : "Personalizado"}
+            </summary>
+            <form className="absolute left-0 top-full mt-1 card p-3 z-10 shadow-lg w-64">
+              <input type="hidden" name="period" value="custom" />
+              <label className="block mb-2">
+                <span className="label block mb-1">De</span>
+                <input
+                  type="date"
+                  name="from"
+                  defaultValue={sp.from ?? ""}
+                  required
+                  className="input"
+                />
+              </label>
+              <label className="block mb-3">
+                <span className="label block mb-1">Até</span>
+                <input
+                  type="date"
+                  name="to"
+                  defaultValue={sp.to ?? ""}
+                  required
+                  className="input"
+                />
+              </label>
+              <button className="btn btn-sm btn-primary w-full">Aplicar</button>
+            </form>
+          </details>
         </div>
 
         {/* KPIs principais */}
