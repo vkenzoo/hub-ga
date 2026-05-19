@@ -11,12 +11,19 @@ interface ProductRow {
   gateway_ids: Record<string, string> | null;
   requires_app_access: boolean;
   pending_config: boolean;
+  role: "acquisition" | "monetization" | "other";
 }
 
 const BILLING: Record<string, string> = {
   one_time: "Avulso",
   recurring_monthly: "Mensal",
   recurring_yearly: "Anual",
+};
+
+const ROLE_CHIP: Record<ProductRow["role"], { dot: string; label: string }> = {
+  acquisition: { dot: "bg-brand", label: "Aquisição" },
+  monetization: { dot: "bg-info", label: "Monetização" },
+  other: { dot: "bg-text2", label: "Outro" },
 };
 
 async function createProduct(formData: FormData) {
@@ -138,6 +145,9 @@ function ProductCard({ p }: { p: ProductRow }) {
             <span className="dot bg-warn" /> Aguardando configuração
           </span>
         )}
+        <span className="chip">
+          <span className={`dot ${ROLE_CHIP[p.role].dot}`} /> {ROLE_CHIP[p.role].label}
+        </span>
         <span className="chip">
           <span className="dot bg-info" /> {BILLING[p.billing_type] ?? p.billing_type}
         </span>

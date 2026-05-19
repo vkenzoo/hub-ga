@@ -106,12 +106,14 @@ export default async function Page({
 
   const sb = createSupabaseAdmin();
 
-  // Puxa todas as compras no período (paid + refunded). Limit alto pra escala atual.
+  // Puxa todas as compras no período (paid + refunded) DE PRODUTOS DE AQUISIÇÃO.
+  // Inner join filtra fora monetização/outros. Limit alto pra escala atual.
   let q = sb
     .from("purchases")
     .select(
-      "id, amount, status, payment_method, customer_id, product_id, utm_source, created_at, products(name)",
+      "id, amount, status, payment_method, customer_id, product_id, utm_source, created_at, products!inner(name, role)",
     )
+    .eq("products.role", "acquisition")
     .in("status", ["paid", "refunded"])
     .order("created_at", { ascending: true })
     .limit(50000);
@@ -128,7 +130,7 @@ export default async function Page({
     product_id: string | null;
     utm_source: string | null;
     created_at: string;
-    products: { name: string } | null;
+    products: { name: string; role: string } | null;
   }
   const purchases = (rows ?? []) as unknown as Row[];
 
@@ -246,6 +248,12 @@ export default async function Page({
       <PageHeader
         title="Aquisição"
         subtitle="Faturamento, margem, reembolsos e métricas por canal."
+        right={
+          <Link href="/acquisition/rules" className="btn btn-sm btn-ghost">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Regras de campanha
+          </Link>
+        }
       />
       <PageBody>
         {/* Filtro de período — compacto */}

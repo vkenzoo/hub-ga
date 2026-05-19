@@ -6,6 +6,8 @@ import { PageBody, PageHeader, Field } from "@/components/page";
 
 type DurationMode = "lifetime" | "follow_subscription" | "fixed_days";
 
+type ProductRole = "acquisition" | "monetization" | "other";
+
 interface ProductRow {
   id: string;
   name: string;
@@ -13,6 +15,7 @@ interface ProductRow {
   gateway_ids: Record<string, string> | null;
   requires_app_access: boolean;
   pending_config: boolean;
+  role: ProductRole;
 }
 interface SystemRow { id: string; slug: string; name: string }
 interface EntitlementRow {
@@ -66,12 +69,16 @@ async function updateProduct(formData: FormData) {
   "use server";
   const sb = createSupabaseAdmin();
   const id = String(formData.get("id"));
+  const role = String(formData.get("role") ?? "other") as ProductRole;
+  const validRole: ProductRole =
+    role === "acquisition" || role === "monetization" || role === "other" ? role : "other";
   await sb
     .from("products")
     .update({
       name: String(formData.get("name") ?? "").trim(),
       billing_type: String(formData.get("billing_type") ?? "one_time"),
       requires_app_access: formData.get("requires_app_access") === "on",
+      role: validRole,
       gateway_ids: {
         assiny: String(formData.get("assiny_id") ?? "").trim(),
         hotmart: String(formData.get("hotmart_id") ?? "").trim(),
@@ -79,6 +86,8 @@ async function updateProduct(formData: FormData) {
     })
     .eq("id", id);
   revalidatePath(`/products/${id}`);
+  revalidatePath("/products");
+  revalidatePath("/acquisition");
 }
 
 async function markConfigured(formData: FormData) {
@@ -216,6 +225,17 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
                 <option value="recurring_monthly">Mensal (recorrente)</option>
                 <option value="recurring_yearly">Anual (recorrente)</option>
               </select>
+            </label>
+            <label className="block md:col-span-2">
+              <span className="label block mb-1.5">Categoria de receita</span>
+              <select name="role" defaultValue={p.role} className="input">
+                <option value="acquisition">Aquisição — vai pro dash de aquisição</option>
+                <option value="monetization">Monetização — futuro dash separado</option>
+                <option value="other">Outro / não classificado</option>
+              </select>
+              <p className="text-2xs text-muted mt-1.5">
+                Vendas desse produto só aparecem no dash da categoria escolhida.
+              </p>
             </label>
             <Field
               name="assiny_id"
