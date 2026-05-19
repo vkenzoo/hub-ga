@@ -46,6 +46,9 @@ const I = {
   connections: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11V7a3 3 0 0 1 6 0v4"/><path d="M5 11h14v10H5z"/><path d="M12 16v2"/></svg>
   ),
+  acquisition: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+  ),
 };
 
 type Section =
@@ -57,7 +60,8 @@ type Section =
   | "products"
   | "webhooks"
   | "executions"
-  | "connections";
+  | "connections"
+  | "acquisition";
 
 interface ItemWithRole extends Item {
   section?: Section;
@@ -66,6 +70,7 @@ interface ItemWithRole extends Item {
 
 const ITEMS: ItemWithRole[] = [
   { href: "/", label: "Resumo", icon: I.resumo, section: "home" },
+  { href: "/acquisition", label: "Aquisição", icon: I.acquisition, section: "acquisition" },
   { href: "/sales", label: "Vendas", icon: I.sales, section: "sales" },
   { href: "/subscriptions", label: "Assinaturas", icon: I.subs, section: "subscriptions" },
   { href: "/customers", label: "Clientes", icon: I.customers, section: "customers" },
