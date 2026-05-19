@@ -27,80 +27,50 @@ function escapeHtml(s: string): string {
 }
 
 function welcomeHtml(p: WelcomeEmailParams): string {
-  const color = p.primaryColor || "#ec2d7c";
+  const color = p.primaryColor || "#000000";
   const name = p.customerName ? escapeHtml(p.customerName) : "";
-  const greeting = name ? `Olá, ${name}!` : "Bem-vindo!";
-
-  const logoBlock = p.logoUrl
-    ? `<img src="${escapeHtml(p.logoUrl)}" alt="${escapeHtml(p.systemName)}" style="max-height:42px;max-width:200px;display:block">`
-    : `<div style="font-size:20px;font-weight:700;color:#111">${escapeHtml(p.systemName)}</div>`;
+  const greeting = name ? `Olá, ${name}.` : "Olá.";
 
   return `<!doctype html>
-<html>
-<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif;color:#1d1d1f">
-  <table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#f5f5f7;padding:32px 16px">
-    <tr>
-      <td align="center">
-        <table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
-          <tr>
-            <td style="padding:32px 32px 24px;border-bottom:1px solid #f0f0f2">
-              ${logoBlock}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px">
-              <h1 style="margin:0 0 8px;font-size:24px;font-weight:600;color:#1d1d1f">${greeting}</h1>
-              <p style="margin:0 0 24px;font-size:16px;line-height:1.5;color:#3a3a3c">
-                Seu acesso ao <strong>${escapeHtml(p.systemName)}</strong> está liberado.
-              </p>
+<html lang="pt-BR">
+<body style="margin:0;padding:24px;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111;line-height:1.55;font-size:15px">
+  <div style="max-width:520px;margin:0 auto">
+    <p style="margin:0 0 16px">${greeting}</p>
+    <p style="margin:0 0 16px">Seu acesso ao <strong>${escapeHtml(p.systemName)}</strong> foi criado. Use as credenciais abaixo pra entrar:</p>
 
-              <p style="margin:0 0 12px;font-size:14px;color:#3a3a3c">Use as credenciais abaixo pra entrar:</p>
+    <p style="margin:0 0 4px"><strong>Email:</strong> ${escapeHtml(p.to)}</p>
+    <p style="margin:0 0 16px"><strong>Senha provisória:</strong> <code style="background:#f4f4f5;padding:2px 6px;border-radius:3px;font-family:Menlo,monospace;font-size:14px">${escapeHtml(p.password)}</code></p>
 
-              <table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#f8f8fa;border-radius:8px;margin:0 0 24px">
-                <tr>
-                  <td style="padding:14px 16px;border-bottom:1px solid #ececef">
-                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#86868b;margin-bottom:4px">Email</div>
-                    <code style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:14px;color:#1d1d1f">${escapeHtml(p.to)}</code>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:14px 16px">
-                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#86868b;margin-bottom:4px">Senha provisória</div>
-                    <code style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:14px;color:#1d1d1f">${escapeHtml(p.password)}</code>
-                  </td>
-                </tr>
-              </table>
+    <p style="margin:0 0 16px">No primeiro acesso você precisa trocar a senha por uma sua.</p>
 
-              <table cellspacing="0" cellpadding="0" border="0">
-                <tr>
-                  <td style="background:${color};border-radius:8px">
-                    <a href="${escapeHtml(p.loginUrl)}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600">
-                      Acessar ${escapeHtml(p.systemName)} →
-                    </a>
-                  </td>
-                </tr>
-              </table>
+    <p style="margin:0 0 16px">Link de acesso: <a href="${escapeHtml(p.loginUrl)}" style="color:${color}">${escapeHtml(p.loginUrl)}</a></p>
 
-              <p style="margin:24px 0 0;font-size:13px;color:#86868b;line-height:1.5">
-                No primeiro acesso você precisa <strong>trocar a senha</strong> por uma sua.
-              </p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px;background:#f8f8fa;font-size:12px;color:#86868b;line-height:1.5">
-              Produto: <span style="color:#3a3a3c">${escapeHtml(p.productName)}</span><br>
-              Esse email foi disparado automaticamente após sua compra.${p.replyToEmail ? ` Dúvidas: responda esse email.` : ""}
-            </td>
-          </tr>
-        </table>
-        <p style="font-size:11px;color:#86868b;margin:24px 0 0;text-align:center">
-          Enviado por Geração A · <a href="https://hubgeracaoa.com" style="color:#86868b;text-decoration:underline">hubgeracaoa.com</a>
-        </p>
-      </td>
-    </tr>
-  </table>
+    <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0">
+    <p style="margin:0;color:#71717a;font-size:13px">
+      Produto: ${escapeHtml(p.productName)}<br>
+      ${p.replyToEmail ? "Dúvidas? Responda esse email." : ""}
+    </p>
+  </div>
 </body>
 </html>`;
+}
+
+function welcomeText(p: WelcomeEmailParams): string {
+  const name = p.customerName ? `Olá, ${p.customerName}.` : "Olá.";
+  return `${name}
+
+Seu acesso ao ${p.systemName} foi criado. Use as credenciais abaixo pra entrar:
+
+Email: ${p.to}
+Senha provisória: ${p.password}
+
+No primeiro acesso você precisa trocar a senha por uma sua.
+
+Link de acesso: ${p.loginUrl}
+
+---
+Produto: ${p.productName}
+${p.replyToEmail ? "Dúvidas? Responda esse email." : ""}`;
 }
 
 /**
@@ -121,8 +91,9 @@ export async function sendWelcomeEmail(p: WelcomeEmailParams): Promise<
   const { data, error } = await resend.emails.send({
     from,
     to: p.to,
-    subject: `Acesso liberado: ${p.systemName}`,
+    subject: `Sua senha do ${p.systemName}`,
     html: welcomeHtml(p),
+    text: welcomeText(p),
     replyTo: p.replyToEmail || undefined,
   });
   if (error || !data) {
@@ -144,66 +115,46 @@ export interface InviteEmailParams {
 }
 
 function inviteHtml(p: InviteEmailParams): string {
-  const color = "#ec2d7c";
   const loginUrl = p.loginUrl || "https://hubgeracaoa.com/login";
   const roleLabel = p.role === "admin" ? "Admin" : "Membro";
 
   return `<!doctype html>
-<html>
-<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif;color:#1d1d1f">
-  <table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#f5f5f7;padding:32px 16px">
-    <tr>
-      <td align="center">
-        <table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
-          <tr>
-            <td style="padding:32px 32px 24px;border-bottom:1px solid #f0f0f2">
-              <div style="font-size:20px;font-weight:700;color:#1d1d1f">GERAÇÃO<span style="color:${color}">A</span></div>
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#86868b;margin-top:4px">Hub Admin</div>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px">
-              <h1 style="margin:0 0 8px;font-size:24px;font-weight:600">Você foi convidado pro hub</h1>
-              <p style="margin:0 0 24px;font-size:16px;line-height:1.5;color:#3a3a3c">
-                <strong>${escapeHtml(p.inviterEmail)}</strong> te adicionou ao Hub Geração A como <strong>${roleLabel}</strong>.
-              </p>
+<html lang="pt-BR">
+<body style="margin:0;padding:24px;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111;line-height:1.55;font-size:15px">
+  <div style="max-width:520px;margin:0 auto">
+    <p style="margin:0 0 16px">Olá.</p>
+    <p style="margin:0 0 16px"><strong>${escapeHtml(p.inviterEmail)}</strong> te adicionou ao Hub da Geração A como <strong>${roleLabel}</strong>. Use as credenciais abaixo pra entrar:</p>
 
-              <table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#f8f8fa;border-radius:8px;margin:0 0 24px">
-                <tr>
-                  <td style="padding:14px 16px;border-bottom:1px solid #ececef">
-                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#86868b;margin-bottom:4px">Email</div>
-                    <code style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:14px">${escapeHtml(p.to)}</code>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:14px 16px">
-                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#86868b;margin-bottom:4px">Senha provisória</div>
-                    <code style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:14px">${escapeHtml(p.tempPassword)}</code>
-                  </td>
-                </tr>
-              </table>
+    <p style="margin:0 0 4px"><strong>Email:</strong> ${escapeHtml(p.to)}</p>
+    <p style="margin:0 0 16px"><strong>Senha provisória:</strong> <code style="background:#f4f4f5;padding:2px 6px;border-radius:3px;font-family:Menlo,monospace;font-size:14px">${escapeHtml(p.tempPassword)}</code></p>
 
-              <table cellspacing="0" cellpadding="0" border="0">
-                <tr>
-                  <td style="background:${color};border-radius:8px">
-                    <a href="${escapeHtml(loginUrl)}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600">
-                      Acessar o hub →
-                    </a>
-                  </td>
-                </tr>
-              </table>
+    <p style="margin:0 0 16px">Troque a senha no primeiro acesso.</p>
 
-              <p style="margin:24px 0 0;font-size:13px;color:#86868b;line-height:1.5">
-                Troque a senha no primeiro acesso. Esse convite é pessoal.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
+    <p style="margin:0 0 16px">Link de acesso: <a href="${escapeHtml(loginUrl)}" style="color:#111">${escapeHtml(loginUrl)}</a></p>
+
+    <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0">
+    <p style="margin:0;color:#71717a;font-size:13px">Esse convite é pessoal. Não compartilhe.</p>
+  </div>
 </body>
 </html>`;
+}
+
+function inviteText(p: InviteEmailParams): string {
+  const loginUrl = p.loginUrl || "https://hubgeracaoa.com/login";
+  const roleLabel = p.role === "admin" ? "Admin" : "Membro";
+  return `Olá.
+
+${p.inviterEmail} te adicionou ao Hub da Geração A como ${roleLabel}. Use as credenciais abaixo pra entrar:
+
+Email: ${p.to}
+Senha provisória: ${p.tempPassword}
+
+Troque a senha no primeiro acesso.
+
+Link de acesso: ${loginUrl}
+
+---
+Esse convite é pessoal. Não compartilhe.`;
 }
 
 export async function sendInviteEmail(p: InviteEmailParams): Promise<
@@ -219,8 +170,9 @@ export async function sendInviteEmail(p: InviteEmailParams): Promise<
   const { data, error } = await resend.emails.send({
     from,
     to: p.to,
-    subject: "Convite pro Hub Geração A",
+    subject: "Sua senha do Hub Geração A",
     html: inviteHtml(p),
+    text: inviteText(p),
   });
   if (error || !data) {
     throw new Error(`Resend error: ${error?.message ?? "unknown"}`);
