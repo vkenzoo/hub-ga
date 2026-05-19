@@ -95,7 +95,7 @@ export function RevenueChart({ data }: { data: DailyPoint[] }) {
           />
           <Tooltip
             content={<TooltipBox />}
-            labelFormatter={(l: string) => fmtDay(l)}
+            labelFormatter={(l) => fmtDay(String(l))}
             cursor={{ fill: "rgba(255,255,255,0.03)" }}
           />
           <Legend
@@ -138,7 +138,7 @@ export function PaymentMethodChart({ data }: { data: PaymentDailyPoint[] }) {
           />
           <Tooltip
             content={<TooltipBox />}
-            labelFormatter={(l: string) => fmtDay(l)}
+            labelFormatter={(l) => fmtDay(String(l))}
             cursor={{ fill: "rgba(255,255,255,0.03)" }}
           />
           <Legend
