@@ -9,21 +9,22 @@ export interface CampaignRule {
   match_type: MatchType;
   classification: Classification;
   active: boolean;
-  priority: number;
+  created_at?: string;
 }
 
 /**
  * Retorna a classificação da campanha pelo nome, ou null se nenhuma regra ativa
- * casar. Vence a regra de menor priority. Matching é case-insensitive (exceto regex
- * que respeita flags do próprio padrão — adiciona 'i' por padrão).
+ * casar. Quando múltiplas regras casam, vence a primeira na ordem recebida —
+ * assume que a lista já vem ordenada por created_at ASC do callsite.
+ * Matching é case-insensitive (regex usa flag 'i').
  */
 export function classifyCampaign(
   name: string | null | undefined,
   rules: CampaignRule[],
 ): Classification | null {
   if (!name) return null;
-  const sorted = rules.filter((r) => r.active).sort((a, b) => a.priority - b.priority);
-  for (const r of sorted) {
+  for (const r of rules) {
+    if (!r.active) continue;
     try {
       const lowerName = name.toLowerCase();
       const lowerPattern = r.pattern.toLowerCase();

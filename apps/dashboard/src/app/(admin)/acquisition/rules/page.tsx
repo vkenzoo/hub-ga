@@ -15,7 +15,6 @@ interface RuleRow {
   pattern: string;
   match_type: MatchType;
   classification: Classification;
-  priority: number;
   active: boolean;
   description: string | null;
   created_at: string;
@@ -50,7 +49,6 @@ async function createRule(formData: FormData) {
   const pattern = String(formData.get("pattern") ?? "").trim();
   const match_type = (String(formData.get("match_type") ?? "contains") as MatchType);
   const classification = (String(formData.get("classification") ?? "acquisition") as Classification);
-  const priority = parseInt(String(formData.get("priority") ?? "100"), 10) || 100;
   const description = String(formData.get("description") ?? "").trim() || null;
 
   if (!pattern) redirect("/acquisition/rules?error=missing_pattern");
@@ -64,7 +62,7 @@ async function createRule(formData: FormData) {
 
   const { data, error } = await sb
     .from("campaign_rules")
-    .insert({ pattern, match_type, classification, priority, description })
+    .insert({ pattern, match_type, classification, description })
     .select("id")
     .single();
 
@@ -77,7 +75,7 @@ async function createRule(formData: FormData) {
     actor: auth.email,
     action: "rule.create",
     target: data.id as string,
-    payload: { pattern, match_type, classification, priority },
+    payload: { pattern, match_type, classification },
   });
 
   revalidatePath("/acquisition/rules");
@@ -120,7 +118,7 @@ async function deleteRule(formData: FormData) {
   const id = String(formData.get("id"));
   const { data: before } = await sb
     .from("campaign_rules")
-    .select("pattern, match_type, classification, priority")
+    .select("pattern, match_type, classification")
     .eq("id", id)
     .maybeSingle();
 
@@ -150,8 +148,7 @@ export default async function Page({
   const { data } = await sb
     .from("campaign_rules")
     .select("*")
-    .order("priority", { ascending: true })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: true });
   const rules = (data ?? []) as RuleRow[];
 
   const errorMsg = sp.error ? ERROR_LABELS[sp.error] ?? "Algo deu errado." : null;
@@ -198,7 +195,7 @@ export default async function Page({
             <h2 className="text-sm font-medium">
               {rules.length} {rules.length === 1 ? "regra" : "regras"}
             </h2>
-            <span className="text-2xs text-muted uppercase tracking-wider">Priority ↑</span>
+            <span className="text-2xs text-muted uppercase tracking-wider">Mais antigas primeiro</span>
           </header>
           {rules.length === 0 ? (
             <div className="px-4 py-10 text-sm text-muted text-center">
@@ -217,7 +214,6 @@ export default async function Page({
                         </span>
                         <span className="chip text-2xs">{MATCH_LABEL[r.match_type]}</span>
                         <code className="font-mono text-sm text-text">{r.pattern}</code>
-                        <span className="text-2xs text-muted">priority {r.priority}</span>
                         {!r.active && (
                           <span className="chip text-muted">
                             <span className="dot bg-text2" /> Pausada
@@ -279,24 +275,11 @@ export default async function Page({
                 </select>
               </label>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-[120px_1fr] gap-3">
-              <label className="block">
-                <span className="label block mb-1.5">Priority</span>
-                <input
-                  type="number"
-                  name="priority"
-                  defaultValue={100}
-                  min={0}
-                  max={9999}
-                  className="input"
-                />
-              </label>
-              <Field
-                name="description"
-                label="Descrição (opcional)"
-                placeholder="Pra que serve essa regra"
-              />
-            </div>
+            <Field
+              name="description"
+              label="Descrição (opcional)"
+              placeholder="Pra que serve essa regra"
+            />
           </div>
           <footer className="px-4 py-3 border-t border-line flex justify-end">
             <SubmitButton pendingLabel="Salvando...">Criar regra</SubmitButton>
@@ -304,8 +287,8 @@ export default async function Page({
         </form>
 
         <p className="text-2xs text-muted">
-          Quando 2 regras casam com a mesma campanha, vence a de menor <code className="font-mono">priority</code>.
-          Regex usa flag <code className="font-mono">i</code> (case-insensitive). Outros tipos também ignoram caixa.
+          Quando 2 regras casam com a mesma campanha, vence a mais antiga (criada primeiro).
+          Matching ignora caixa em todos os tipos. Regex usa flag <code className="font-mono">i</code>.
         </p>
       </PageBody>
     </>
