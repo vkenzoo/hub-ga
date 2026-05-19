@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hub/db": "workspace:*",
+    "@hub/email": "workspace:*",
     "@hub/shared": "workspace:*",
     "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "^2.45.0",

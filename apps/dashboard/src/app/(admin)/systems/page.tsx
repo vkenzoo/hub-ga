@@ -9,6 +9,9 @@ interface SystemRow {
   supabase_url: string;
   service_key_env: string;
   base_app_url: string;
+  logo_url: string | null;
+  primary_color: string | null;
+  reply_to_email: string | null;
 }
 
 async function listSystems(): Promise<SystemRow[]> {
@@ -21,11 +24,15 @@ async function updateSystem(formData: FormData) {
   "use server";
   const sb = createSupabaseAdmin();
   const id = String(formData.get("id"));
+  const color = String(formData.get("primary_color") ?? "").trim();
   const patch = {
     name: String(formData.get("name") ?? "").trim(),
     supabase_url: String(formData.get("supabase_url") ?? "").trim(),
     service_key_env: String(formData.get("service_key_env") ?? "").trim(),
     base_app_url: String(formData.get("base_app_url") ?? "").trim(),
+    logo_url: String(formData.get("logo_url") ?? "").trim() || null,
+    primary_color: /^#[0-9a-f]{3,8}$/i.test(color) ? color : null,
+    reply_to_email: String(formData.get("reply_to_email") ?? "").trim() || null,
   };
   await sb.from("systems").update(patch).eq("id", id);
   revalidatePath("/systems");
@@ -106,6 +113,39 @@ export default async function Page() {
                   mono
                 />
               </div>
+
+              <details className="border-t border-line group">
+                <summary className="px-5 py-2.5 cursor-pointer list-none flex items-center justify-between text-sm text-text2 hover:bg-surface2 transition">
+                  <span>Branding do email de boas-vindas</span>
+                  <span className="text-2xs text-muted">expandir / recolher</span>
+                </summary>
+                <div className="p-5 border-t border-line grid grid-cols-1 md:grid-cols-2 gap-4 bg-surface2/30">
+                  <Field
+                    name="logo_url"
+                    label="URL pública da logo"
+                    defaultValue={s.logo_url ?? ""}
+                    placeholder="https://app.exemplo.com/logo.png"
+                    mono
+                  />
+                  <Field
+                    name="primary_color"
+                    label="Cor primária (hex)"
+                    defaultValue={s.primary_color ?? "#ec2d7c"}
+                    placeholder="#ec2d7c"
+                    mono
+                  />
+                  <Field
+                    name="reply_to_email"
+                    label="Reply-To"
+                    defaultValue={s.reply_to_email ?? ""}
+                    placeholder="contato@exemplo.com"
+                    mono
+                  />
+                  <div className="text-2xs text-muted self-end pb-1">
+                    Cliente vê logo, botão na cor escolhida e responder vai pro Reply-To.
+                  </div>
+                </div>
+              </details>
 
               <footer className="px-5 py-3 border-t border-line flex items-center justify-between">
                 <span className="text-xs text-muted">

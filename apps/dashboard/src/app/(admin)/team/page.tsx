@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
+import { sendInviteEmail } from "@hub/email";
 import { PageBody, PageHeader, Field } from "@/components/page";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -110,16 +111,33 @@ async function inviteMember(formData: FormData) {
     redirect("/team?error=insert_failed");
   }
 
+  // Dispara email automaticamente. Se Resend não estiver configurado, retorna
+  // { skipped: true } e o admin manda a senha manualmente (URL ainda mostra).
+  let emailStatus: "sent" | "skipped" | "failed" = "skipped";
+  try {
+    const r = await sendInviteEmail({
+      to: email,
+      inviterEmail: me.email,
+      tempPassword,
+      role,
+      loginUrl: "https://hubgeracaoa.com/login",
+    });
+    emailStatus = r.skipped ? "skipped" : "sent";
+  } catch (err) {
+    console.error("[team] sendInviteEmail failed:", err);
+    emailStatus = "failed";
+  }
+
   await logAudit({
     actor: me.email,
     action: "team.invite",
     target: email,
-    payload: { role, allowed_sections, access_mode: accessMode },
+    payload: { role, allowed_sections, access_mode: accessMode, email_status: emailStatus },
   });
 
   revalidatePath("/team");
   redirect(
-    `/team?invited=${encodeURIComponent(email)}&pwd=${encodeURIComponent(tempPassword)}&mode=${accessMode}`,
+    `/team?invited=${encodeURIComponent(email)}&pwd=${encodeURIComponent(tempPassword)}&mode=${accessMode}&email=${emailStatus}`,
   );
 }
 
@@ -232,6 +250,7 @@ export default async function Page({
     invited?: string;
     pwd?: string;
     mode?: string;
+    email?: string;
     changed?: string;
     removed?: string;
     e?: string;
@@ -284,11 +303,16 @@ export default async function Page({
           <section className="card border-accent/40 bg-accent/5">
             <header className="px-4 py-3 border-b border-accent/20">
               <h2 className="text-sm font-medium text-accent">
-                Convite criado — envie essas credenciais
+                Convite criado
               </h2>
               <p className="text-xs text-text2 mt-1">
-                Essa senha aparece <strong>uma única vez</strong>. Copie e mande pro novo
-                membro por WhatsApp ou email. Ele troca no primeiro login.
+                {sp.email === "sent"
+                  ? <>Email com as credenciais foi enviado pra <strong>{sp.invited}</strong>. Backup abaixo caso precise reenviar.</>
+                  : sp.email === "skipped"
+                    ? <>Resend não está configurado — copie a senha abaixo e mande manual.</>
+                    : sp.email === "failed"
+                      ? <>⚠️ Falhou ao enviar email. Copie a senha abaixo e mande manual.</>
+                      : <>Senha aparece <strong>uma única vez</strong>. Copie e mande pro novo membro.</>}
               </p>
             </header>
             <div className="p-4 space-y-3">
@@ -316,7 +340,8 @@ export default async function Page({
           <header className="px-4 py-3 border-b border-line">
             <h2 className="text-sm font-medium">Convidar novo membro</h2>
             <p className="text-xs text-muted mt-1">
-              Senha aleatória é gerada automaticamente; você compartilha manualmente.
+              Senha temporária é gerada automaticamente e enviada por email (se Resend
+              estiver configurado). Você também consegue copiar manualmente após criar.
             </p>
           </header>
           <form action={inviteMember} className="p-4 space-y-4">

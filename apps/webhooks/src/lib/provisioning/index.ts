@@ -21,6 +21,9 @@ interface SystemRow {
   slug: string;
   name: string;
   base_app_url: string;
+  logo_url: string | null;
+  primary_color: string | null;
+  reply_to_email: string | null;
 }
 
 interface ProductRow {
@@ -104,7 +107,7 @@ export async function provisionForPurchase(
   if (systemIds.length > 0) {
     const { data: systems } = await hub
       .from("systems")
-      .select("id,slug,name,base_app_url")
+      .select("id,slug,name,base_app_url,logo_url,primary_color,reply_to_email")
       .in("id", systemIds);
     for (const s of (systems ?? []) as SystemRow[]) systemsById.set(s.id, s);
   }
@@ -176,6 +179,9 @@ export async function provisionForPurchase(
             systemName: system.name,
             loginUrl: system.base_app_url,
             password,
+            logoUrl: system.logo_url,
+            primaryColor: system.primary_color,
+            replyToEmail: system.reply_to_email,
           });
           await logEvent(hub, "provisioning.welcome_email", {
             payload: { system: system.slug, email: customerRow.email, result: emailResult },
