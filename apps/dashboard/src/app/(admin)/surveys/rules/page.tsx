@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 import { requireAdmin, canAccessSection } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
-import { PageBody, PageHeader, Field } from "@/components/page";
-import { SubmitButton } from "@/components/submit-button";
+import { PageBody, PageHeader } from "@/components/page";
+import { RuleForm } from "./rule-form";
 
 type MatchType = "contains" | "equals" | "starts_with" | "regex";
 type Classification = "a" | "b" | "c" | "d" | "e";
@@ -163,11 +163,38 @@ export default async function Page({
 
   const sp = await searchParams;
   const sb = createSupabaseAdmin();
-  const { data } = await sb
-    .from("lead_qualification_rules")
-    .select("*")
-    .order("created_at", { ascending: true });
-  const rules = (data ?? []) as RuleRow[];
+  const [{ data: rulesData }, { data: responsesData }] = await Promise.all([
+    sb
+      .from("lead_qualification_rules")
+      .select("*")
+      .order("created_at", { ascending: true }),
+    sb
+      .from("survey_responses")
+      .select("form_id, answers")
+      .limit(2000),
+  ]);
+  const rules = (rulesData ?? []) as RuleRow[];
+
+  // Constrói mapa de pergunta → respostas únicas (a partir das últimas 2000 respostas)
+  const questionMap: Record<string, Set<string>> = {};
+  const formIdsSet = new Set<string>();
+  for (const r of (responsesData ?? []) as Array<{
+    form_id: string;
+    answers: Record<string, unknown> | null;
+  }>) {
+    if (r.form_id) formIdsSet.add(r.form_id);
+    if (!r.answers) continue;
+    for (const [q, a] of Object.entries(r.answers)) {
+      if (typeof a !== "string" || !a.trim()) continue;
+      if (!questionMap[q]) questionMap[q] = new Set();
+      questionMap[q]!.add(a);
+    }
+  }
+  const sortedQuestionMap: Record<string, string[]> = {};
+  for (const q of Object.keys(questionMap).sort()) {
+    sortedQuestionMap[q] = [...questionMap[q]!].sort();
+  }
+  const formIds = [...formIdsSet].sort();
 
   const errorMsg = sp.error ? ERROR_LABELS[sp.error] ?? "Algo deu errado." : null;
 
@@ -201,66 +228,11 @@ export default async function Page({
         )}
 
         {/* Criar */}
-        <form action={createRule} className="card">
-          <header className="px-4 py-3 border-b border-line">
-            <h2 className="text-sm font-medium">Nova regra</h2>
-            <p className="text-xs text-muted mt-1">
-              "Se a resposta da pergunta X casar com Y, classifica como Lead Z."
-              Quando 2 regras casam com a mesma resposta, vence a mais antiga.
-            </p>
-          </header>
-          <div className="p-4 space-y-3">
-            <Field
-              name="question_key"
-              label="Pergunta (texto exato como aparece em answers)"
-              placeholder="Qual seu faturamento mensal?"
-              required
-            />
-            <div className="grid grid-cols-1 md:grid-cols-[180px_1fr] gap-3">
-              <label className="block">
-                <span className="label block mb-1.5">Tipo de match</span>
-                <select name="match_type" defaultValue="contains" className="input">
-                  <option value="contains">Contém</option>
-                  <option value="equals">Igual a</option>
-                  <option value="starts_with">Começa com</option>
-                  <option value="regex">Regex</option>
-                </select>
-              </label>
-              <Field
-                name="answer_pattern"
-                label="Padrão da resposta"
-                placeholder="Ex: Acima de R$ 100k"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-[180px_180px_1fr] gap-3">
-              <label className="block">
-                <span className="label block mb-1.5">Classificação</span>
-                <select name="classification" defaultValue="a" className="input">
-                  <option value="a">Lead A</option>
-                  <option value="b">Lead B</option>
-                  <option value="c">Lead C</option>
-                  <option value="d">Lead D</option>
-                  <option value="e">Lead E</option>
-                </select>
-              </label>
-              <Field
-                name="form_id"
-                label="Form ID (opcional)"
-                placeholder="todos se vazio"
-                mono
-              />
-              <Field
-                name="description"
-                label="Descrição (opcional)"
-                placeholder="Pra que serve essa regra"
-              />
-            </div>
-          </div>
-          <footer className="px-4 py-3 border-t border-line flex justify-end">
-            <SubmitButton pendingLabel="Salvando...">Criar regra</SubmitButton>
-          </footer>
-        </form>
+        <RuleForm
+          questionMap={sortedQuestionMap}
+          formIds={formIds}
+          createAction={createRule}
+        />
 
         {/* Lista */}
         <section className="card overflow-hidden">
