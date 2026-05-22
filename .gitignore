@@ -13,6 +13,7 @@ dist/
 coverage/
 supabase/.branches
 supabase/.temp
+*.tsbuildinfo
 
 # Memória local do projeto (não vai pro Git)
 MEMÓRIA/

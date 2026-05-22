@@ -3,6 +3,7 @@ import { createHubServiceClient } from "@hub/db";
 import { MAX_JOB_ATTEMPTS } from "@hub/shared";
 import { createSystemUser } from "@/lib/provisioning/create-system-user";
 import { logEvent } from "@/lib/logger";
+import { safeEqual } from "@/lib/hmac";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const auth = req.headers.get("authorization") ?? "";
   const secret = process.env.CRON_SECRET;
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!secret || !safeEqual(auth, `Bearer ${secret}`)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

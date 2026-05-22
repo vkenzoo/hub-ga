@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHubServiceClient } from "@hub/db";
 import { logEvent } from "@/lib/logger";
+import { safeEqual } from "@/lib/hmac";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,7 +55,7 @@ export async function GET(
     return NextResponse.json({ error: "server_misconfigured" }, { status: 500 });
   }
   const auth = req.headers.get("authorization") ?? "";
-  if (auth !== `Bearer ${expected}`) {
+  if (!safeEqual(auth, `Bearer ${expected}`)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

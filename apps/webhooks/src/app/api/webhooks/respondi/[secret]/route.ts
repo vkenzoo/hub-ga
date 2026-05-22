@@ -112,6 +112,19 @@ export async function POST(
       });
     }
 
+    // Sanitiza formId antes de interpolar em filtros PostgREST (.or() abaixo).
+    // form_id da Respondi é alfanumérico — qualquer outro caractere é injection attempt.
+    if (!/^[a-zA-Z0-9_-]+$/.test(formId)) {
+      await logEvent(hub, "respondi.invalid_form_id", {
+        level: "warn",
+        payload: { form_id: formId },
+      });
+      return finish("invalid_payload", 200, { ok: true, ignored: "invalid_form_id" }, {
+        rawEventType: "respondi.response",
+        errorMessage: "form_id contém caracteres inválidos",
+      });
+    }
+
     // Dedup por (respondent_id, form_id) — se já recebeu, ignora
     const { data: existing } = await hub
       .from("survey_responses")
