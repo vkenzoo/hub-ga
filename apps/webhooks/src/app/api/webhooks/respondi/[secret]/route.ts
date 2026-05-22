@@ -3,6 +3,8 @@ import { createHubServiceClient } from "@hub/db";
 import { timingSafeEqual } from "node:crypto";
 import { extractEmail, extractPhone, classifyResponse, type QualificationRule } from "@/lib/surveys";
 import { logEvent } from "@/lib/logger";
+import { runWithExecution } from "@/lib/execution-context";
+import { createExecution, finishExecution, type ExecutionStatus } from "@/lib/executions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,125 +45,176 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ secret: string }> },
 ) {
+  const startedAt = Date.now();
+  const rawBody = await req.text();
   const { secret: pathSecret } = await params;
   const expectedSecret = process.env.RESPONDI_WEBHOOK_SECRET;
 
-  if (!expectedSecret) {
-    return NextResponse.json({ error: "server_misconfigured" }, { status: 500 });
-  }
-  if (!safeEqualString(pathSecret, expectedSecret)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  let payload: RespondiPayload;
-  try {
-    payload = (await req.json()) as RespondiPayload;
-  } catch {
-    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
-  }
-
   const hub = createHubServiceClient();
+  const executionId = await createExecution(hub, {
+    gateway: "respondi",
+    headers: req.headers,
+    rawBody,
+  });
 
-  const formId = payload.form?.form_id;
-  const respondentId = payload.respondent?.respondent_id;
-
-  if (!formId || !respondentId) {
-    await logEvent(hub, "respondi.invalid_payload", {
-      level: "warn",
-      payload: { reason: "missing_form_or_respondent", body: payload },
-    });
-    return NextResponse.json({ ok: true, ignored: "missing_form_or_respondent" }, { status: 200 });
+  async function finish(
+    status: ExecutionStatus,
+    http: number,
+    body: object,
+    extras?: Partial<Parameters<typeof finishExecution>[2]>,
+  ) {
+    if (executionId) {
+      await finishExecution(hub, executionId, {
+        status,
+        httpStatus: http,
+        startedAt,
+        ...extras,
+      });
+    }
+    return NextResponse.json(body, { status: http });
   }
 
-  // Dedup por (respondent_id, form_id) — se já recebeu, ignora
-  const { data: existing } = await hub
-    .from("survey_responses")
-    .select("id")
-    .eq("respondi_respondent_id", respondentId)
-    .eq("form_id", formId)
-    .maybeSingle();
+  return runWithExecution(executionId ?? "no-execution", async () => {
+    if (!expectedSecret) {
+      return finish("failed", 500, { error: "server_misconfigured" }, {
+        errorMessage: "RESPONDI_WEBHOOK_SECRET ausente",
+      });
+    }
 
-  if (existing) {
-    await logEvent(hub, "respondi.duplicate", {
-      level: "info",
-      payload: { respondent_id: respondentId, form_id: formId },
-    });
-    return NextResponse.json({ ok: true, ignored: "duplicate" }, { status: 200 });
-  }
+    if (!safeEqualString(pathSecret, expectedSecret)) {
+      await logEvent(hub, "respondi.invalid_secret", {
+        level: "warn",
+        payload: { ip: req.headers.get("x-real-ip") ?? null },
+      });
+      return finish("rejected_auth", 401, { error: "unauthorized" });
+    }
 
-  const answers = (payload.respondent?.answers ?? {}) as Record<string, unknown>;
-  const rawAnswers = payload.respondent?.raw_answers ?? [];
-  const email = extractEmail(answers, rawAnswers);
-  const phone = extractPhone(answers, rawAnswers);
-  const phoneNorm = normalizePhone(phone);
+    let payload: RespondiPayload;
+    try {
+      payload = JSON.parse(rawBody) as RespondiPayload;
+    } catch {
+      return finish("invalid_payload", 400, { error: "invalid_json" }, {
+        errorMessage: "JSON malformado",
+      });
+    }
 
-  // Tenta linkar customer existente por email primeiro, depois phone normalizado
-  let customerId: string | null = null;
-  if (email) {
-    const { data } = await hub.from("customers").select("id").eq("email", email).maybeSingle();
-    if (data) customerId = data.id as string;
-  }
-  if (!customerId && phoneNorm) {
-    const { data } = await hub
-      .from("customers")
+    const formId = payload.form?.form_id;
+    const respondentId = payload.respondent?.respondent_id;
+
+    if (!formId || !respondentId) {
+      await logEvent(hub, "respondi.missing_ids", {
+        level: "warn",
+        payload: { reason: "missing_form_or_respondent" },
+      });
+      return finish("invalid_payload", 200, { ok: true, ignored: "missing_form_or_respondent" }, {
+        rawEventType: "respondi.response",
+        errorMessage: "form_id ou respondent_id ausente",
+      });
+    }
+
+    // Dedup por (respondent_id, form_id) — se já recebeu, ignora
+    const { data: existing } = await hub
+      .from("survey_responses")
       .select("id")
-      .eq("phone_normalized", phoneNorm)
-      .limit(1);
-    if (data && data.length > 0) customerId = data[0]!.id as string;
-  }
+      .eq("respondi_respondent_id", respondentId)
+      .eq("form_id", formId)
+      .maybeSingle();
 
-  // Carrega regras de qualificação ativas (global + do form específico)
-  const { data: rulesData } = await hub
-    .from("lead_qualification_rules")
-    .select("*")
-    .eq("active", true)
-    .or(`form_id.is.null,form_id.eq.${formId}`)
-    .order("created_at", { ascending: true });
+    if (existing) {
+      await logEvent(hub, "respondi.duplicate", {
+        level: "info",
+        payload: { respondent_id: respondentId, form_id: formId },
+      });
+      return finish("duplicate", 200, { ok: true, ignored: "duplicate" }, {
+        rawEventType: "respondi.response",
+        gatewayEventId: `${respondentId}_${formId}`,
+        classifiedAs: "duplicate",
+      });
+    }
 
-  const rules = (rulesData ?? []) as unknown as QualificationRule[];
-  const qualification = classifyResponse(answers, rules, formId);
+    const answers = (payload.respondent?.answers ?? {}) as Record<string, unknown>;
+    const rawAnswers = payload.respondent?.raw_answers ?? [];
+    const email = extractEmail(answers, rawAnswers);
+    const phone = extractPhone(answers, rawAnswers);
+    const phoneNorm = normalizePhone(phone);
 
-  const utms = payload.respondent?.respondent_utms ?? {};
+    // Tenta linkar customer existente por email primeiro, depois phone normalizado
+    let customerId: string | null = null;
+    if (email) {
+      const { data } = await hub.from("customers").select("id").eq("email", email).maybeSingle();
+      if (data) customerId = data.id as string;
+    }
+    if (!customerId && phoneNorm) {
+      const { data } = await hub
+        .from("customers")
+        .select("id")
+        .eq("phone_normalized", phoneNorm)
+        .limit(1);
+      if (data && data.length > 0) customerId = data[0]!.id as string;
+    }
 
-  const { error: insErr } = await hub.from("survey_responses").insert({
-    respondi_respondent_id: respondentId,
-    form_id: formId,
-    form_name: payload.form?.form_name ?? null,
-    email,
-    phone,
-    score: payload.respondent?.score ?? null,
-    utm_source: utms.utm_source ?? null,
-    utm_medium: utms.utm_medium ?? null,
-    utm_campaign: utms.utm_campaign ?? null,
-    utm_content: utms.utm_content ?? null,
-    utm_term: utms.utm_term ?? null,
-    answers,
-    raw_answers: rawAnswers,
-    raw_payload: payload,
-    qualification,
-    customer_id: customerId,
-  });
+    // Carrega regras de qualificação ativas (global + do form específico)
+    const { data: rulesData } = await hub
+      .from("lead_qualification_rules")
+      .select("*")
+      .eq("active", true)
+      .or(`form_id.is.null,form_id.eq.${formId}`)
+      .order("created_at", { ascending: true });
 
-  if (insErr) {
-    console.error("[respondi] insert failed:", insErr);
-    await logEvent(hub, "respondi.insert_failed", {
-      level: "error",
-      payload: { error: insErr.message, respondent_id: respondentId, form_id: formId },
-    });
-    return NextResponse.json({ error: "insert_failed" }, { status: 500 });
-  }
+    const rules = (rulesData ?? []) as unknown as QualificationRule[];
+    const qualification = classifyResponse(answers, rules, formId);
 
-  await logEvent(hub, "respondi.received", {
-    payload: {
-      respondent_id: respondentId,
+    const utms = payload.respondent?.respondent_utms ?? {};
+
+    const { error: insErr } = await hub.from("survey_responses").insert({
+      respondi_respondent_id: respondentId,
       form_id: formId,
+      form_name: payload.form?.form_name ?? null,
+      email,
+      phone,
+      score: payload.respondent?.score ?? null,
+      utm_source: utms.utm_source ?? null,
+      utm_medium: utms.utm_medium ?? null,
+      utm_campaign: utms.utm_campaign ?? null,
+      utm_content: utms.utm_content ?? null,
+      utm_term: utms.utm_term ?? null,
+      answers,
+      raw_answers: rawAnswers,
+      raw_payload: payload,
       qualification,
-      has_email: !!email,
-      has_phone: !!phone,
-      customer_matched: !!customerId,
-    },
-    customerId: customerId ?? undefined,
-  });
+      customer_id: customerId,
+    });
 
-  return NextResponse.json({ ok: true, qualification, customer_matched: !!customerId }, { status: 200 });
+    if (insErr) {
+      console.error("[respondi] insert failed:", insErr);
+      return finish("failed", 500, { error: "insert_failed" }, {
+        rawEventType: "respondi.response",
+        errorMessage: insErr.message.slice(0, 500),
+        gatewayEventId: `${respondentId}_${formId}`,
+      });
+    }
+
+    await logEvent(hub, "respondi.received", {
+      payload: {
+        respondent_id: respondentId,
+        form_id: formId,
+        qualification,
+        has_email: !!email,
+        has_phone: !!phone,
+        customer_matched: !!customerId,
+      },
+      customerId: customerId ?? undefined,
+    });
+
+    return finish("completed", 200, {
+      ok: true,
+      qualification,
+      customer_matched: !!customerId,
+    }, {
+      rawEventType: "respondi.response",
+      classifiedAs: qualification ? `lead_${qualification}` : "unclassified",
+      gatewayEventId: `${respondentId}_${formId}`,
+      customerId: customerId ?? undefined,
+    });
+  });
 }

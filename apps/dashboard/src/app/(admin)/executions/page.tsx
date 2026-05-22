@@ -111,13 +111,14 @@ export default async function Page({
             type="search"
             name="q"
             defaultValue={sp.q ?? ""}
-            placeholder="Buscar event, gateway_event_id, IP, erro..."
+            placeholder="Buscar event, ID, IP, erro..."
             className="input"
           />
           <select name="gateway" defaultValue={sp.gateway ?? "all"} className="input">
-            <option value="all">Todos gateways</option>
+            <option value="all">Todas plataformas</option>
             <option value="assiny">Assiny</option>
             <option value="hotmart">Hotmart</option>
+            <option value="respondi">Respondi</option>
           </select>
           <select name="status" defaultValue={sp.status ?? "all"} className="input">
             <option value="all">Todos status</option>
@@ -147,7 +148,7 @@ export default async function Page({
               <thead className="text-2xs uppercase tracking-wider text-muted border-b border-line bg-surface2/30">
                 <tr>
                   <th className="text-left font-medium px-4 py-2.5 w-32">Quando</th>
-                  <th className="text-left font-medium px-4 py-2.5 w-20">Gateway</th>
+                  <th className="text-left font-medium px-4 py-2.5 w-24">Plataforma</th>
                   <th className="text-left font-medium px-4 py-2.5">Evento</th>
                   <th className="text-left font-medium px-4 py-2.5 w-44">Status</th>
                   <th className="text-right font-medium px-4 py-2.5 w-20">Duração</th>

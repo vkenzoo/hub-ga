@@ -259,7 +259,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
             <div className="text-lg tabular-nums">{fmtDuration(e.duration_ms)}</div>
           </div>
           <div className="card p-3">
-            <div className="label mb-1.5">Gateway</div>
+            <div className="label mb-1.5">Plataforma</div>
             <span className="chip text-2xs uppercase">{e.gateway}</span>
           </div>
           <div className="card p-3">
@@ -289,7 +289,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
               )}
               {e.gateway_event_id && (
                 <div>
-                  <dt className="label mb-1">Gateway event ID</dt>
+                  <dt className="label mb-1">ID do evento</dt>
                   <dd className="font-mono text-xs break-all">{e.gateway_event_id}</dd>
                 </div>
               )}

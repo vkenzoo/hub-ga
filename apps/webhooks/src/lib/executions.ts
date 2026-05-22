@@ -12,10 +12,10 @@ export type ExecutionStatus =
   | "completed"
   | "failed";
 
-type Gateway = "assiny" | "hotmart";
+export type Platform = "assiny" | "hotmart" | "respondi";
 
 interface CreateExecutionParams {
-  gateway: Gateway;
+  gateway: Platform;  // mantido como "gateway" pra compatibilidade com schema
   headers: Headers;
   rawBody: string;
 }
