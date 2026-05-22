@@ -120,14 +120,19 @@ export default async function Page({
 
       <PageBody>
         {/* KPIs */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard label="Respostas (últimas 500)" value={totalResponses} />
           <StatCard label="Únicas por contato" value={uniqueByContact} />
           <StatCard
+            label="Respostas válidas"
+            value={matchedCustomers}
+            tone="accent"
+            hint="Email ou telefone bate com cliente da base"
+          />
+          <StatCard
             label="% Conversão"
             value={fmtPct(conversionRate)}
-            tone="accent"
-            hint={`${matchedCustomers} responderam e compraram`}
+            hint="Respostas válidas ÷ únicas por contato"
           />
           <StatCard
             label="Não classificados"
