@@ -145,11 +145,26 @@ export default async function Page({
 
   const sp = await searchParams;
   const sb = createSupabaseAdmin();
-  const { data } = await sb
-    .from("campaign_rules")
-    .select("*")
-    .order("created_at", { ascending: true });
-  const rules = (data ?? []) as RuleRow[];
+  const [{ data: rulesData }, { data: productsData }] = await Promise.all([
+    sb
+      .from("campaign_rules")
+      .select("*")
+      .order("created_at", { ascending: true }),
+    sb
+      .from("products")
+      .select("id, name, gateway_ids, billing_type, pending_config")
+      .eq("role", "acquisition")
+      .eq("pending_config", false)
+      .order("name", { ascending: true }),
+  ]);
+  const rules = (rulesData ?? []) as RuleRow[];
+  const acquisitionProducts = (productsData ?? []) as Array<{
+    id: string;
+    name: string;
+    gateway_ids: Record<string, string> | null;
+    billing_type: string;
+    pending_config: boolean;
+  }>;
 
   const errorMsg = sp.error ? ERROR_LABELS[sp.error] ?? "Algo deu errado." : null;
 
@@ -182,11 +197,60 @@ export default async function Page({
           </div>
         )}
 
+        {/* Produtos contados como Aquisição */}
+        <section className="card overflow-hidden">
+          <header className="px-4 py-3 border-b border-line flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-medium">Produtos que contam como Aquisição</h2>
+              <p className="text-xs text-muted mt-0.5">
+                Vendas desses produtos somam no faturamento do dash de aquisição.
+              </p>
+            </div>
+            <span className="chip">
+              <span className="dot bg-brand" />
+              {acquisitionProducts.length}
+            </span>
+          </header>
+          {acquisitionProducts.length === 0 ? (
+            <div className="px-4 py-8 text-sm text-muted text-center">
+              Nenhum produto classificado como Aquisição. Vai em{" "}
+              <Link href="/products" className="text-brand hover:underline">/products</Link>{" "}
+              e marca a categoria nos produtos que liberam acesso de aquisição.
+            </div>
+          ) : (
+            <ul className="divide-y divide-line">
+              {acquisitionProducts.map((p) => {
+                const assiny = p.gateway_ids?.assiny;
+                const hotmart = p.gateway_ids?.hotmart;
+                return (
+                  <li key={p.id} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                    <Link
+                      href={`/products/${p.id}`}
+                      className="flex-1 min-w-0 hover:text-brand transition"
+                    >
+                      <div className="text-sm font-medium truncate">{p.name}</div>
+                      <div className="flex flex-wrap items-center gap-2 mt-0.5 text-2xs">
+                        <span className="text-muted">{p.billing_type}</span>
+                        {assiny && assiny !== "TODO" && (
+                          <span className="font-mono text-text2">assiny: {assiny.slice(0, 12)}...</span>
+                        )}
+                        {hotmart && hotmart !== "TODO" && (
+                          <span className="font-mono text-text2">hotmart: {hotmart}</span>
+                        )}
+                      </div>
+                    </Link>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted shrink-0"><path d="m9 18 6-6-6-6"/></svg>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
         <div className="card border-info/30 bg-info/5 px-4 py-3 text-sm text-text2">
-          <strong className="text-info">Como funciona:</strong> quando o sync com Meta Ads
-          (fase 2) trouxer as campanhas, cada uma é classificada pela primeira regra ativa que
-          casar com seu nome. Vence a regra com menor <code className="font-mono">priority</code>.
-          Sem rule = não conta em nenhum dash.
+          <strong className="text-info">Regras abaixo:</strong> classificam <em>gastos de Meta Ads</em>
+          (campanhas) — não produtos. Quando o sync com Meta Ads (fase 2) trouxer as campanhas, cada
+          uma é avaliada pelas regras. Vence a primeira que casar (criada antes). Sem rule = não conta.
         </div>
 
         {/* Lista de regras */}
