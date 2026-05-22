@@ -13,3 +13,6 @@ dist/
 coverage/
 supabase/.branches
 supabase/.temp
+
+# Memória local do projeto (não vai pro Git)
+MEMÓRIA/

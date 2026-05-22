@@ -52,6 +52,9 @@ const I = {
   guides: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
   ),
+  surveys: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+  ),
 };
 
 type Section =
@@ -65,7 +68,8 @@ type Section =
   | "executions"
   | "connections"
   | "acquisition"
-  | "guides";
+  | "guides"
+  | "surveys";
 
 interface ItemWithRole extends Item {
   section?: Section;
@@ -75,6 +79,7 @@ interface ItemWithRole extends Item {
 const ITEMS: ItemWithRole[] = [
   { href: "/", label: "Resumo", icon: I.resumo, section: "home" },
   { href: "/acquisition", label: "Aquisição", icon: I.acquisition, section: "acquisition" },
+  { href: "/surveys", label: "Pesquisa", icon: I.surveys, section: "surveys" },
   { href: "/sales", label: "Vendas", icon: I.sales, section: "sales" },
   { href: "/subscriptions", label: "Assinaturas", icon: I.subs, section: "subscriptions" },
   { href: "/customers", label: "Clientes", icon: I.customers, section: "customers" },
