@@ -122,6 +122,8 @@ export function Sidebar({
     if (!allowedSections) return true; // null = todas
     return allowedSections.includes(it.section);
   });
+  const regularItems = visibleItems.filter((it) => !it.superAdminOnly);
+  const adminItems = visibleItems.filter((it) => it.superAdminOnly);
 
   // Fecha o drawer ao mudar de rota
   useEffect(() => {
@@ -203,12 +205,11 @@ export function Sidebar({
           </button>
         </div>
 
-        <div className="px-4 pt-5 pb-2">
-          <span className="label">Geral</span>
-        </div>
-
-        <nav className="px-2 space-y-0.5 overflow-y-auto">
-          {visibleItems.map((it) => {
+        <nav className="px-2 space-y-0.5 overflow-y-auto flex-1">
+          <div className="px-2.5 pt-3 pb-2">
+            <span className="label">Geral</span>
+          </div>
+          {regularItems.map((it) => {
             const isActive = isActiveLink(it.href, pathname);
             return (
               <Link
@@ -223,6 +224,30 @@ export function Sidebar({
               </Link>
             );
           })}
+
+          {adminItems.length > 0 && (
+            <>
+              <div className="px-2.5 pt-5 pb-2 flex items-center gap-1.5">
+                <span className="label">Admin</span>
+                <span className="dot bg-brand" />
+              </div>
+              {adminItems.map((it) => {
+                const isActive = isActiveLink(it.href, pathname);
+                return (
+                  <Link
+                    key={it.href}
+                    href={it.href}
+                    className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition ${
+                      isActive ? "bg-surface2 text-text" : "text-text2 hover:bg-surface hover:text-text"
+                    }`}
+                  >
+                    <span className={isActive ? "text-brand" : ""}>{it.icon}</span>
+                    {it.label}
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
 
         <div className="mt-auto border-t border-line p-3">
