@@ -20,9 +20,10 @@ export default async function Page() {
   }
 
   const sb = createSupabaseAdmin();
-  const [{ data: connections }, { data: outbound }] = await Promise.all([
+  const [{ data: connections }, { data: outbound }, { data: surveyForms }] = await Promise.all([
     sb.from("connections").select("kind"),
     sb.from("outbound_webhooks").select("id"),
+    sb.from("survey_responses").select("form_id"),
   ]);
 
   const conns = (connections ?? []) as Array<{ kind: string }>;
@@ -30,6 +31,12 @@ export default async function Page() {
     acc[c.kind] = (acc[c.kind] ?? 0) + 1;
     return acc;
   }, {});
+
+  // Conta forms únicos do Respondi (cada form configurado = 1 conexão lógica)
+  const respondiForms = new Set<string>();
+  for (const r of (surveyForms ?? []) as Array<{ form_id: string }>) {
+    if (r.form_id) respondiForms.add(r.form_id);
+  }
 
   const cards: CardConfig[] = [
     {
@@ -61,6 +68,16 @@ export default async function Page() {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
       ),
       count: byKind.cademi ?? 0,
+    },
+    {
+      href: respondiForms.size > 0 ? "/surveys" : "/surveys/setup",
+      title: "Respondi.app",
+      description: "Recebe respostas de pesquisas via webhook e qualifica leads automaticamente.",
+      iconBg: "bg-warn/10 text-warn",
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      ),
+      count: respondiForms.size,
     },
     {
       href: "/connections/outbound",
