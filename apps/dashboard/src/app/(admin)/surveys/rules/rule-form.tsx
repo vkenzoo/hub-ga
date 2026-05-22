@@ -5,13 +5,18 @@ import { SubmitButton } from "@/components/submit-button";
 
 type MatchType = "contains" | "equals" | "starts_with" | "regex";
 
+interface FormInfo {
+  id: string;
+  name: string;
+}
+
 interface RuleFormProps {
   questionMap: Record<string, string[]>;  // pergunta → array de respostas únicas
-  formIds: string[];                       // form_ids únicos disponíveis
+  forms: FormInfo[];                       // forms únicos vistos (id + nome)
   createAction: (formData: FormData) => Promise<void>;
 }
 
-export function RuleForm({ questionMap, formIds, createAction }: RuleFormProps) {
+export function RuleForm({ questionMap, forms, createAction }: RuleFormProps) {
   const questions = Object.keys(questionMap);
   const [selectedQuestion, setSelectedQuestion] = useState<string>(questions[0] ?? "");
   const [matchType, setMatchType] = useState<MatchType>("equals");
@@ -144,12 +149,12 @@ export function RuleForm({ questionMap, formIds, createAction }: RuleFormProps) 
           </label>
 
           <label className="block">
-            <span className="label block mb-1.5">Form (opcional)</span>
+            <span className="label block mb-1.5">Form</span>
             <select name="form_id" defaultValue="" className="input">
-              <option value="">Todos os forms</option>
-              {formIds.map((f) => (
-                <option key={f} value={f}>
-                  {f}
+              <option value="">Geral (todos os forms)</option>
+              {forms.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
                 </option>
               ))}
             </select>

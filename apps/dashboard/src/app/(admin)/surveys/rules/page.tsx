@@ -170,19 +170,22 @@ export default async function Page({
       .order("created_at", { ascending: true }),
     sb
       .from("survey_responses")
-      .select("form_id, answers")
+      .select("form_id, form_name, answers")
       .limit(2000),
   ]);
   const rules = (rulesData ?? []) as RuleRow[];
 
   // Constrói mapa de pergunta → respostas únicas (a partir das últimas 2000 respostas)
   const questionMap: Record<string, Set<string>> = {};
-  const formIdsSet = new Set<string>();
+  const formNameMap = new Map<string, string>();
   for (const r of (responsesData ?? []) as Array<{
     form_id: string;
+    form_name: string | null;
     answers: Record<string, unknown> | null;
   }>) {
-    if (r.form_id) formIdsSet.add(r.form_id);
+    if (r.form_id && !formNameMap.has(r.form_id)) {
+      formNameMap.set(r.form_id, r.form_name ?? r.form_id);
+    }
     if (!r.answers) continue;
     for (const [q, a] of Object.entries(r.answers)) {
       if (typeof a !== "string" || !a.trim()) continue;
@@ -194,7 +197,9 @@ export default async function Page({
   for (const q of Object.keys(questionMap).sort()) {
     sortedQuestionMap[q] = [...questionMap[q]!].sort();
   }
-  const formIds = [...formIdsSet].sort();
+  const forms = [...formNameMap.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   const errorMsg = sp.error ? ERROR_LABELS[sp.error] ?? "Algo deu errado." : null;
 
@@ -230,7 +235,7 @@ export default async function Page({
         {/* Criar */}
         <RuleForm
           questionMap={sortedQuestionMap}
-          formIds={formIds}
+          forms={forms}
           createAction={createRule}
         />
 
