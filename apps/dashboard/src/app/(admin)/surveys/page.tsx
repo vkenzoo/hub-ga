@@ -85,10 +85,13 @@ export default async function Page({
   const uniqueByContact = new Set(
     rows.map((r) => r.email ?? r.phone ?? r.respondi_respondent_id),
   ).size;
-  const matchedCustomers = rows.filter((r) => r.customer_id).length;
+  const buyerRows = rows.filter((r) => r.customer_id);
+  const matchedCustomers = buyerRows.length;
   const conversionRate = uniqueByContact > 0 ? (matchedCustomers / uniqueByContact) * 100 : 0;
 
-  const byQual = rows.reduce<Record<string, number>>((acc, r) => {
+  // Distribuição A/B/C/D/E só conta compradores (quem está na base de clientes).
+  // Não-compradores ainda aparecem na tabela completa abaixo.
+  const byQual = buyerRows.reduce<Record<string, number>>((acc, r) => {
     const k = r.qualification ?? "_none";
     acc[k] = (acc[k] ?? 0) + 1;
     return acc;
@@ -137,26 +140,32 @@ export default async function Page({
           <StatCard
             label="Não classificados"
             value={byQual._none ?? 0}
-            hint="Nenhuma regra casou"
+            hint="Compradores sem regra casando"
           />
         </section>
 
-        {/* Distribuição A/B/C/D/E */}
-        <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {(["a", "b", "c", "d", "e"] as const).map((q) => {
-            const c = QUAL_STYLES[q]!;
-            const count = byQual[q] ?? 0;
-            const pct = totalResponses > 0 ? (count / totalResponses) * 100 : 0;
-            return (
-              <div key={q} className="card p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="label">{c.label}</span>
-                  <span className="text-2xs text-muted">{fmtPct(pct)}</span>
+        {/* Distribuição A/B/C/D/E — só compradores */}
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <span className="label">Classificação dos compradores</span>
+            <span className="text-2xs text-muted">Base: {matchedCustomers} respostas válidas</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {(["a", "b", "c", "d", "e"] as const).map((q) => {
+              const c = QUAL_STYLES[q]!;
+              const count = byQual[q] ?? 0;
+              const pct = matchedCustomers > 0 ? (count / matchedCustomers) * 100 : 0;
+              return (
+                <div key={q} className="card p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="label">{c.label}</span>
+                    <span className="text-2xs text-muted">{fmtPct(pct)}</span>
+                  </div>
+                  <div className={`text-2xl md:text-3xl font-medium ${c.text}`}>{count}</div>
                 </div>
-                <div className={`text-2xl md:text-3xl font-medium ${c.text}`}>{count}</div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </section>
 
         {/* Filtros */}
