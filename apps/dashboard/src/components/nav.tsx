@@ -85,10 +85,10 @@ const ITEMS: ItemWithRole[] = [
   { href: "/customers", label: "Clientes", icon: I.customers, section: "customers" },
   { href: "/systems", label: "Sistemas", icon: I.systems, section: "systems" },
   { href: "/products", label: "Produtos", icon: I.products, section: "products" },
-  { href: "/webhooks", label: "Webhooks", icon: I.webhooks, section: "webhooks" },
-  { href: "/connections", label: "Conexões", icon: I.connections, section: "connections" },
-  { href: "/executions", label: "Executions", icon: I.executions, section: "executions" },
   { href: "/guides", label: "Guias", icon: I.guides, section: "guides" },
+  { href: "/connections", label: "Conexões", icon: I.connections, superAdminOnly: true },
+  { href: "/webhooks", label: "Webhooks", icon: I.webhooks, superAdminOnly: true },
+  { href: "/executions", label: "Executions", icon: I.executions, superAdminOnly: true },
   { href: "/team", label: "Equipe", icon: I.team, superAdminOnly: true },
   { href: "/audit", label: "Auditoria", icon: I.audit, superAdminOnly: true },
 ];
