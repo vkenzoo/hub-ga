@@ -74,20 +74,8 @@ function GuideCard({
           {CATEGORY_ICONS[guide.category]}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-2xs text-muted uppercase tracking-wider">
-              {categoryShort[guide.category]}
-            </span>
-            {guide.recent && (
-              <span className="text-2xs px-1.5 py-0.5 rounded bg-brand/15 text-brand font-medium">
-                Novo
-              </span>
-            )}
-            {guide.featured && (
-              <span className="text-2xs px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">
-                ★ Destaque
-              </span>
-            )}
+          <div className="text-2xs text-muted uppercase tracking-wider mb-1">
+            {categoryShort[guide.category]}
           </div>
           <h3 className="text-sm font-medium leading-snug text-text">
             {guide.title}
