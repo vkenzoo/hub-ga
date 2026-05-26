@@ -90,6 +90,7 @@ const assinyMetadataSchema = z
     ip: z.string().optional(),
     user_agent: z.string().optional(),
     url_parameters: z.record(z.unknown()).optional(),
+    event_source_url: z.string().optional(),
   })
   .passthrough();
 

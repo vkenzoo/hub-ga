@@ -32,6 +32,12 @@ export interface NormalizedPurchase {
   gateway: Gateway;
   eventKind: EventKind;
   gatewayEventId: string;
+  /**
+   * Transaction ID "puro" (sem sufixo de evento). Usado pra resolver
+   * lost_purchases do mesmo tx quando o pagamento chega depois de
+   * pix_generated/pix_expired. Opcional — se ausente, não tenta resolver.
+   */
+  txExternalId?: string;
   gatewayProductId: string;
   productNameHint?: string;
   paymentMethod?: string;
@@ -62,6 +68,32 @@ export interface SubscriptionStatusEvent {
   gatewaySubscriptionId: string;
   newStatus: "past_due" | "cancelled";
   currentPeriodEnd?: string | null;
+}
+
+export type LostKind =
+  | "pix_pending"
+  | "pix_expired"
+  | "billet_pending"
+  | "billet_expired"
+  | "cart_abandoned";
+
+export interface NormalizedLostPurchase {
+  platform: Gateway;
+  kind: LostKind;
+  externalEventId: string;     // tx.id quando existir, senão composto
+  email?: string;
+  phone?: string;
+  productGatewayId?: string;
+  productNameHint?: string;
+  offerName?: string;
+  amountCents: number;
+  utm?: { source?: string; medium?: string; campaign?: string; content?: string; term?: string };
+  funnelRef?: string;
+  eventSourceUrl?: string;
+  paymentMethod?: string;
+  expiredQrCode?: string;
+  occurredAt: string;          // ISO
+  rawPayload?: unknown;
 }
 
 type FoundProduct = { id: string; pendingConfig: boolean };
@@ -113,7 +145,7 @@ async function createDraftProduct(
  * Aceita "+55 (11) 91234-5678", "11912345678", "5511912345678" → "11912345678".
  * Retorna null se phone não tem dígitos suficientes pra ser válido.
  */
-function normalizePhone(phone?: string): string | null {
+export function normalizePhone(phone?: string): string | null {
   if (!phone) return null;
   const digits = phone.replace(/\D/g, "");
   if (digits.length < 8) return null;
@@ -359,6 +391,16 @@ export async function recordPurchase(
       break;
   }
 
+  // Fecha o lifecycle: se essa purchase corresponde a um pix_pending/pix_expired
+  // (mesmo tx_id "puro"), marca como resolved.
+  if ((p.eventKind === "purchase_paid" || p.eventKind === "subscription_renewed") && p.txExternalId) {
+    try {
+      await markLostResolvedByTxId(hub, p.gateway, p.txExternalId);
+    } catch (err) {
+      console.error("[recordPurchase] markLostResolved failed:", err);
+    }
+  }
+
   return { skipped: false, customerId, purchaseId };
 }
 
@@ -415,5 +457,150 @@ export async function handleSubscriptionStatusEvent(
   return { ok: true };
 }
 
-export { revokeGrantsForPurchase };
+/**
+ * Insere uma "venda perdida" (PIX/boleto não pago, carrinho abandonado).
+ *
+ * Idempotente via (platform, kind, external_event_id).
+ *
+ * Lifecycle do mesmo tx_id (Assiny):
+ *   pix_generated → row pix_pending inserida
+ *   ↓
+ *   pix_expired → row pix_pending marcada resolved=true (resolvido por expiração)
+ *                + nova row pix_expired inserida
+ *   ↓
+ *   approved_purchase → recordPurchase chama markLostResolved abaixo:
+ *                       marca todas as rows daquele tx_id como resolved=true
+ *
+ * Não cria customer — só linka se já existir.
+ */
+export async function recordLostPurchase(
+  hub: SupabaseClient,
+  lp: NormalizedLostPurchase,
+): Promise<{ skipped: true; reason: string } | { skipped: false; id: string }> {
+  // 1. Dedupe
+  const { data: existing } = await hub
+    .from("lost_purchases")
+    .select("id")
+    .eq("platform", lp.platform)
+    .eq("kind", lp.kind)
+    .eq("external_event_id", lp.externalEventId)
+    .maybeSingle();
+
+  if (existing) {
+    return { skipped: true, reason: "duplicate" };
+  }
+
+  // 2. Quando chega pix_expired, marca o pix_pending do mesmo tx como "resolved por expiração"
+  if (lp.kind === "pix_expired" || lp.kind === "billet_expired") {
+    const pendingKind = lp.kind === "pix_expired" ? "pix_pending" : "billet_pending";
+    await hub
+      .from("lost_purchases")
+      .update({ resolved: true, resolved_at: new Date().toISOString() })
+      .eq("platform", lp.platform)
+      .eq("kind", pendingKind)
+      .eq("external_event_id", lp.externalEventId);
+  }
+
+  // 3. Resolve customer_id (só se existir — não cria)
+  const phoneNorm = normalizePhone(lp.phone);
+  let customerId: string | null = null;
+  if (lp.email) {
+    const { data } = await hub
+      .from("customers")
+      .select("id")
+      .eq("email", lp.email)
+      .maybeSingle();
+    if (data) customerId = data.id as string;
+  }
+  if (!customerId && phoneNorm) {
+    const { data } = await hub
+      .from("customers")
+      .select("id")
+      .eq("phone_normalized", phoneNorm)
+      .limit(1);
+    if (data && data.length > 0) customerId = data[0]!.id as string;
+  }
+
+  // 4. Resolve product_id se já existir cadastrado (não cria draft)
+  let productId: string | null = null;
+  if (lp.productGatewayId) {
+    const { data } = await hub
+      .from("products")
+      .select("id")
+      .filter("gateway_ids->>" + lp.platform, "eq", lp.productGatewayId)
+      .maybeSingle();
+    if (data) productId = data.id as string;
+  }
+
+  // 5. Insere
+  const { data: inserted, error } = await hub
+    .from("lost_purchases")
+    .insert({
+      platform: lp.platform,
+      kind: lp.kind,
+      external_event_id: lp.externalEventId,
+      email: lp.email ?? null,
+      phone: lp.phone ?? null,
+      phone_normalized: phoneNorm,
+      customer_id: customerId,
+      product_gateway_id: lp.productGatewayId ?? null,
+      product_id: productId,
+      product_name: lp.productNameHint ?? null,
+      offer_name: lp.offerName ?? null,
+      amount_cents: lp.amountCents,
+      utm_source: lp.utm?.source ?? null,
+      utm_medium: lp.utm?.medium ?? null,
+      utm_campaign: lp.utm?.campaign ?? null,
+      utm_content: lp.utm?.content ?? null,
+      utm_term: lp.utm?.term ?? null,
+      funnel_ref: lp.funnelRef ?? null,
+      event_source_url: lp.eventSourceUrl ?? null,
+      payment_method: lp.paymentMethod ?? null,
+      expired_qr_code: lp.expiredQrCode ?? null,
+      occurred_at: lp.occurredAt,
+      raw_payload: lp.rawPayload ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (error || !inserted) {
+    console.error("[recordLostPurchase] insert failed:", error);
+    return { skipped: true, reason: "insert_failed" };
+  }
+
+  await logEvent(hub, "lost_purchase.recorded", {
+    payload: {
+      platform: lp.platform,
+      kind: lp.kind,
+      external_event_id: lp.externalEventId,
+      email: lp.email,
+      amount_cents: lp.amountCents,
+    },
+    customerId: customerId ?? undefined,
+  });
+
+  return { skipped: false, id: inserted.id as string };
+}
+
+/**
+ * Quando uma purchase nova é registrada, marca lost_purchases do mesmo
+ * external_event_id (tx_id) como resolved=true. Isso fecha o lifecycle:
+ * pix_pending + pix_expired daquele tx viram resolved.
+ *
+ * NÃO faz match por email/phone (Fase 1) — só por tx_id direto.
+ */
+async function markLostResolvedByTxId(
+  hub: SupabaseClient,
+  platform: Gateway,
+  externalEventId: string,
+): Promise<void> {
+  await hub
+    .from("lost_purchases")
+    .update({ resolved: true, resolved_at: new Date().toISOString() })
+    .eq("platform", platform)
+    .eq("external_event_id", externalEventId)
+    .eq("resolved", false);
+}
+
+export { revokeGrantsForPurchase, markLostResolvedByTxId };
 export const GRACE_DAYS = GRACE_PERIOD_DAYS;
