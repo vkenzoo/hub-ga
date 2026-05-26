@@ -4,7 +4,7 @@ export function PageHeader({
   right,
 }: {
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   right?: React.ReactNode;
 }) {
   return (
@@ -12,7 +12,11 @@ export function PageHeader({
       <div className="px-4 md:px-6 py-4 md:py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
           <h1 className="text-lg font-medium text-text leading-tight">{title}</h1>
-          {subtitle && <p className="text-sm text-muted mt-0.5">{subtitle}</p>}
+          {subtitle && (
+            typeof subtitle === "string"
+              ? <p className="text-sm text-muted mt-0.5">{subtitle}</p>
+              : <div className="mt-0.5">{subtitle}</div>
+          )}
         </div>
         {right && <div className="flex items-center gap-2 shrink-0 flex-wrap">{right}</div>}
       </div>

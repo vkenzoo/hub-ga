@@ -72,7 +72,13 @@
     @apply text-2xl font-semibold mt-0 mb-4 pb-3 border-b border-line;
   }
   .prose-guide h2 {
-    @apply text-lg font-semibold mt-8 mb-3 text-text;
+    @apply text-lg font-semibold mt-8 mb-3 text-text scroll-mt-6 relative;
+  }
+  .prose-guide h2 .anchor {
+    @apply text-muted/40 hover:text-brand no-underline mr-2 -ml-5 select-none opacity-0 transition-opacity;
+  }
+  .prose-guide h2:hover .anchor {
+    @apply opacity-100;
   }
   .prose-guide h3 {
     @apply text-base font-semibold mt-6 mb-2 text-text;
