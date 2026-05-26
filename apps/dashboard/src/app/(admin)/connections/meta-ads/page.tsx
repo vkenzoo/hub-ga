@@ -34,6 +34,8 @@ const META_ERROR_LABELS: Record<string, string> = {
   missing_fields: "Preencha todos os campos obrigatórios.",
   not_found: "Conexão não encontrada.",
   insert_failed: "Falha ao salvar. Tente novamente.",
+  encryption_misconfigured:
+    "ENCRYPTION_KEY não está configurada no Vercel (ou tem tamanho errado). Veja o guia em /guides ou cole openssl rand -base64 32 como env var e dê Redeploy.",
 };
 
 function errorMsg(code: string, detail?: string): string {

@@ -51,9 +51,18 @@ export async function connectMetaBM(formData: FormData) {
     redirect(backTo(params.toString()));
   }
 
-  // 2. Criptografa
-  const access_token_ciphertext = encrypt(access_token);
-  const app_secret_ciphertext = encrypt(app_secret);
+  // 2. Criptografa — falha se ENCRYPTION_KEY não tá configurada no Vercel
+  let access_token_ciphertext: string;
+  let app_secret_ciphertext: string;
+  try {
+    access_token_ciphertext = encrypt(access_token);
+    app_secret_ciphertext = encrypt(app_secret);
+  } catch (err) {
+    console.error("[connectMetaBM] encrypt failed:", err);
+    const detail = err instanceof Error ? err.message : String(err);
+    const params = new URLSearchParams({ error: "encryption_misconfigured", detail });
+    redirect(backTo(params.toString()));
+  }
 
   // 3. Upsert da conexão (UNIQUE por business_manager_id)
   const { data: conn, error: connErr } = await sb
@@ -150,7 +159,18 @@ export async function healthcheckMetaBM(formData: FormData) {
 
   if (connErr || !conn) redirect(backTo("error=not_found"));
 
-  const { token, appSecret } = decryptCredentials(conn);
+  let token: string;
+  let appSecret: string;
+  try {
+    const creds = decryptCredentials(conn);
+    token = creds.token;
+    appSecret = creds.appSecret;
+  } catch (err) {
+    console.error("[healthcheckMetaBM] decrypt failed:", err);
+    const detail = err instanceof Error ? err.message : String(err);
+    const params = new URLSearchParams({ error: "encryption_misconfigured", detail });
+    redirect(backTo(params.toString()));
+  }
   const result = await validateToken(token, conn.business_manager_id, appSecret);
 
   if (!result.ok) {
