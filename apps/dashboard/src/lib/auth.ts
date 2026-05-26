@@ -16,7 +16,8 @@ export type Section =
   | "acquisition"
   | "guides"
   | "surveys"
-  | "recovery";
+  | "recovery"
+  | "refunds";
 
 export const ALL_SECTIONS: Section[] = [
   "home",
@@ -32,6 +33,7 @@ export const ALL_SECTIONS: Section[] = [
   "guides",
   "surveys",
   "recovery",
+  "refunds",
 ];
 
 export const SECTION_LABEL: Record<Section, string> = {
@@ -48,6 +50,7 @@ export const SECTION_LABEL: Record<Section, string> = {
   guides: "Guias",
   surveys: "Pesquisa",
   recovery: "Recuperação",
+  refunds: "Reembolsos",
 };
 
 const SECTION_PATH: Record<Section, string> = {
@@ -64,6 +67,7 @@ const SECTION_PATH: Record<Section, string> = {
   guides: "/guides",
   surveys: "/surveys",
   recovery: "/recovery",
+  refunds: "/refunds",
 };
 
 /**
