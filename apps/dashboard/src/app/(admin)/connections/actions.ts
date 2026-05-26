@@ -29,48 +29,7 @@ function sectionRedirect(section: Section, extra?: string): string {
   return `/connections/${section}${extra ? "?" + extra : ""}`;
 }
 
-// ── Meta Ads ────────────────────────────────────────────────────
-
-export async function createMetaAds(formData: FormData) {
-  const me = await requireConnections();
-  const sb = createSupabaseAdmin();
-
-  const label = String(formData.get("label") ?? "").trim();
-  const app_id = String(formData.get("app_id") ?? "").trim();
-  const app_secret = String(formData.get("app_secret") ?? "").trim();
-  const business_manager_id = String(formData.get("business_manager_id") ?? "").trim();
-  const access_token = String(formData.get("access_token") ?? "").trim();
-
-  if (!label || !app_id || !app_secret || !business_manager_id || !access_token) {
-    redirect(sectionRedirect("meta-ads", "error=missing_fields"));
-  }
-
-  const { data, error } = await sb
-    .from("connections")
-    .insert({
-      kind: "meta_ads",
-      label,
-      status: "pending",
-      config: { app_id, app_secret, business_manager_id, access_token },
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    console.error("[connections] meta_ads insert failed:", error);
-    redirect(sectionRedirect("meta-ads", "error=insert_failed"));
-  }
-
-  await logAudit({
-    actor: me.email,
-    action: "connection.create",
-    target: data.id as string,
-    payload: { kind: "meta_ads", label, business_manager_id },
-  });
-
-  revalidatePath("/connections");
-  redirect(sectionRedirect("meta-ads", `saved=${encodeURIComponent(label)}`));
-}
+// Meta Ads agora vive em meta-ads/actions.ts (usa meta_connections + ad_accounts).
 
 // ── InLead ──────────────────────────────────────────────────────
 

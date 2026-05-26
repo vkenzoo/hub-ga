@@ -20,10 +20,11 @@ export default async function Page() {
   }
 
   const sb = createSupabaseAdmin();
-  const [{ data: connections }, { data: outbound }, { data: surveyForms }] = await Promise.all([
+  const [{ data: connections }, { data: outbound }, { data: surveyForms }, { data: metaConns }] = await Promise.all([
     sb.from("connections").select("kind"),
     sb.from("outbound_webhooks").select("id"),
     sb.from("survey_responses").select("form_id"),
+    sb.from("meta_connections").select("id"),
   ]);
 
   const conns = (connections ?? []) as Array<{ kind: string }>;
@@ -31,6 +32,7 @@ export default async function Page() {
     acc[c.kind] = (acc[c.kind] ?? 0) + 1;
     return acc;
   }, {});
+  const metaConnCount = (metaConns ?? []).length;
 
   // Conta forms únicos do Respondi (cada form configurado = 1 conexão lógica)
   const respondiForms = new Set<string>();
@@ -47,7 +49,7 @@ export default async function Page() {
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V14H8v-2h2V9.5C10 7.57 11.57 6 13.5 6H16v2h-2c-.55 0-1 .45-1 1v3h3l-.5 2H13v7.95c5.05-.5 9-4.76 9-9.95C22 6.48 17.52 2 12 2z"/></svg>
       ),
-      count: byKind.meta_ads ?? 0,
+      count: metaConnCount,
     },
     {
       href: "/connections/inlead",
