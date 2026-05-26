@@ -5,7 +5,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, Field } from "@/components/page";
 import { SubmitButton } from "@/components/submit-button";
 import { SecretInput } from "@/components/secret-input";
-import { connectMetaBM, healthcheckMetaBM, deleteMetaBM } from "./actions";
+import { connectMetaBM, healthcheckMetaBM, deleteMetaBM, syncMetaBM } from "./actions";
 import { fmtDate, statusChip } from "../helpers";
 import { validationErrorLabel, type ValidationError } from "@/lib/meta/validate-token";
 
@@ -36,6 +36,7 @@ const META_ERROR_LABELS: Record<string, string> = {
   insert_failed: "Falha ao salvar. Tente novamente.",
   encryption_misconfigured:
     "ENCRYPTION_KEY não está configurada no Vercel (ou tem tamanho errado). Veja o guia em /guides ou cole openssl rand -base64 32 como env var e dê Redeploy.",
+  sync_failed: "Sync falhou.",
 };
 
 function errorMsg(code: string, detail?: string): string {
@@ -67,6 +68,8 @@ export default async function Page({
     accounts?: string;
     checked?: string;
     removed?: string;
+    synced?: string;
+    rows?: string;
   }>;
 }) {
   const auth = await requireAdmin();
@@ -120,6 +123,12 @@ export default async function Page({
         {sp.checked && (
           <div className="card border-accent/30 bg-accent/5 px-4 py-2.5 text-sm text-accent">
             ✓ <strong>{sp.checked}</strong> — token válido, contas re-sincronizadas.
+          </div>
+        )}
+        {sp.synced && (
+          <div className="card border-accent/30 bg-accent/5 px-4 py-2.5 text-sm text-accent">
+            ✓ Sync completo — <strong>{sp.synced}</strong> contas processadas,{" "}
+            <strong>{sp.rows ?? "0"}</strong> rows upserted.
           </div>
         )}
         {sp.removed && (
@@ -192,6 +201,15 @@ export default async function Page({
                         )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        <form action={syncMetaBM}>
+                          <input type="hidden" name="id" value={c.id} />
+                          <button
+                            className="btn btn-sm btn-primary"
+                            title="Puxa últimos 30 dias de insights da Marketing API"
+                          >
+                            ⟳ Sincronizar
+                          </button>
+                        </form>
                         <form action={healthcheckMetaBM}>
                           <input type="hidden" name="id" value={c.id} />
                           <button

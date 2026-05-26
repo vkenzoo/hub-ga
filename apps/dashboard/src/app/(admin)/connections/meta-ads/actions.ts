@@ -8,6 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { encrypt } from "@/lib/crypto";
 import { validateToken } from "@/lib/meta/validate-token";
 import { decryptCredentials } from "@/lib/meta/conn-credentials";
+import { syncMetaConnection } from "@/lib/meta/sync";
 
 async function requireMetaAccess() {
   const auth = await requireAdmin();
@@ -243,7 +244,48 @@ export async function healthcheckMetaBM(formData: FormData) {
 }
 
 /**
- * Remove conexão (cascade apaga ad_accounts e futuras meta_ad_insights_daily).
+ * Sync manual — puxa últimos 30 dias de insights pra todas as ad_accounts
+ * dessa conexão. Roda em segundo plano? Não — server action é síncrona.
+ * Pra muitas contas, prefere o cron diário.
+ */
+export async function syncMetaBM(formData: FormData) {
+  const me = await requireMetaAccess();
+  const sb = createSupabaseAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect(backTo("error=missing_fields"));
+
+  const result = await syncMetaConnection(sb, id, 30);
+
+  await logAudit({
+    actor: me.email,
+    action: "meta.sync.manual",
+    target: id,
+    payload: {
+      ad_accounts_processed: result.ad_accounts_processed,
+      rows_upserted: result.rows_upserted,
+      errors: result.errors.length,
+    },
+  });
+
+  revalidatePath("/connections/meta-ads");
+  revalidatePath("/acquisition");
+
+  if (!result.ok || result.errors.length > 0) {
+    const detail = result.errors[0]?.error ?? "unknown";
+    const params = new URLSearchParams({ error: "sync_failed", detail });
+    redirect(backTo(params.toString()));
+  }
+
+  redirect(
+    backTo(
+      `synced=${result.ad_accounts_processed}&rows=${result.rows_upserted}`,
+    ),
+  );
+}
+
+/**
+ * Remove conexão (cascade apaga ad_accounts e meta_ad_insights_daily).
  */
 export async function deleteMetaBM(formData: FormData) {
   const me = await requireMetaAccess();

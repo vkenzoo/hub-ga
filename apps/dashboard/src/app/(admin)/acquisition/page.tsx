@@ -120,7 +120,20 @@ export default async function Page({
     .limit(50000);
   if (startISO) q = q.gte("created_at", startISO);
   if (endISO) q = q.lt("created_at", endISO);
-  const { data: rows } = await q;
+
+  // Investimento Meta — spend de campanhas classificadas como 'acquisition' no período.
+  // Convertemos date_start (date) → comparação com startISO (timestamptz) via slice(0,10).
+  const startDate = startISO ? startISO.slice(0, 10) : null;
+  const endDate = endISO ? endISO.slice(0, 10) : null;
+  let metaQ = sb
+    .from("meta_ad_insights_daily")
+    .select("spend_cents, date_start")
+    .eq("classification", "acquisition")
+    .limit(100000);
+  if (startDate) metaQ = metaQ.gte("date_start", startDate);
+  if (endDate) metaQ = metaQ.lt("date_start", endDate);
+
+  const [{ data: rows }, { data: metaRows }] = await Promise.all([q, metaQ]);
 
   interface Row {
     id: string;
@@ -141,7 +154,12 @@ export default async function Page({
 
   const receita = paid.reduce((s, p) => s + Number(p.amount), 0);
   const reembolsos = refunded.reduce((s, p) => s + Number(p.amount), 0);
-  const investimento = 0; // MVP — virá do Meta na fase 2
+  // Meta ads insights são armazenados em centavos → divide por 100 pra alinhar com purchases (real)
+  const investimentoCents = (metaRows ?? []).reduce(
+    (s, r) => s + Number((r as { spend_cents: number }).spend_cents ?? 0),
+    0,
+  );
+  const investimento = investimentoCents / 100;
   const taxas = receita * GATEWAY_FEE_RATE;
   const margem = receita - taxas - reembolsos - investimento;
   const margemPct = receita > 0 ? (margem / receita) * 100 : 0;
