@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, StatCard } from "@/components/page";
+import { Hideable } from "@/components/hideable";
 
 interface CustomerRow {
   id: string;
@@ -133,8 +134,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   return (
     <>
       <PageHeader
-        title={c.email}
-        subtitle={c.name ?? "Cliente sem nome cadastrado"}
+        title={<Hideable kind="email">{c.email}</Hideable>}
+        subtitle={<Hideable kind="text">{c.name ?? "Cliente sem nome cadastrado"}</Hideable>}
         right={
           <Link href="/customers" className="btn btn-sm">
             ← Clientes
@@ -145,10 +146,10 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       <PageBody>
         {/* Stats */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="Total gasto" value={fmtMoney(totalSpent)} tone="accent" />
-          <StatCard label="Vendas" value={ps.length} />
-          <StatCard label="Assinaturas" value={subs.length} />
-          <StatCard label="Acessos ativos" value={activeGrants.length} />
+          <StatCard label="Total gasto" value={<Hideable kind="money">{fmtMoney(totalSpent)}</Hideable>} tone="accent" />
+          <StatCard label="Vendas" value={<Hideable kind="count">{String(ps.length)}</Hideable>} />
+          <StatCard label="Assinaturas" value={<Hideable kind="count">{String(subs.length)}</Hideable>} />
+          <StatCard label="Acessos ativos" value={<Hideable kind="count">{String(activeGrants.length)}</Hideable>} />
         </section>
 
         {/* Identidade */}
@@ -159,15 +160,15 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 text-sm">
             <div>
               <dt className="label mb-1">Email</dt>
-              <dd className="font-mono text-xs">{c.email}</dd>
+              <dd className="font-mono text-xs"><Hideable kind="email">{c.email}</Hideable></dd>
             </div>
             <div>
               <dt className="label mb-1">Nome</dt>
-              <dd>{c.name ?? <span className="text-muted">—</span>}</dd>
+              <dd>{c.name ? <Hideable kind="text">{c.name}</Hideable> : <span className="text-muted">—</span>}</dd>
             </div>
             <div>
               <dt className="label mb-1">Telefone</dt>
-              <dd>{c.phone ?? <span className="text-muted">—</span>}</dd>
+              <dd>{c.phone ? <Hideable kind="phone">{c.phone}</Hideable> : <span className="text-muted">—</span>}</dd>
             </div>
             <div>
               <dt className="label mb-1">Primeiro gateway</dt>
@@ -294,7 +295,9 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
                       <td className="px-4 py-2.5">
                         <span className="chip text-2xs uppercase">{p.gateway}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{fmtMoney(p.amount)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">
+                        <Hideable kind="money">{fmtMoney(p.amount)}</Hideable>
+                      </td>
                       <td className="px-4 py-2.5">
                         <span className="chip">
                           <span className={`dot ${s.dot}`} /> {s.label}

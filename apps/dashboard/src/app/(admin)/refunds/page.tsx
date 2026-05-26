@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin, canAccessSection } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, StatCard } from "@/components/page";
+import { Hideable } from "@/components/hideable";
 
 // ── Tipos ────────────────────────────────────────────────────
 type RefundStatus = "refunded" | "chargeback";
@@ -271,23 +272,23 @@ export default async function Page({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard
             label="Reembolsado"
-            value={fmtMoney(refundedTotal)}
-            hint={`${refundedRows.length} ${refundedRows.length === 1 ? "estorno" : "estornos"}`}
+            value={<Hideable kind="money">{fmtMoney(refundedTotal)}</Hideable>}
+            hint={<Hideable kind="count">{`${refundedRows.length} ${refundedRows.length === 1 ? "estorno" : "estornos"}`}</Hideable>}
           />
           <StatCard
             label="Chargeback"
-            value={fmtMoney(chargebackTotal)}
-            hint={`${chargebackRows.length} ${chargebackRows.length === 1 ? "caso" : "casos"}`}
+            value={<Hideable kind="money">{fmtMoney(chargebackTotal)}</Hideable>}
+            hint={<Hideable kind="count">{`${chargebackRows.length} ${chargebackRows.length === 1 ? "caso" : "casos"}`}</Hideable>}
           />
           <StatCard
             label="Total perdido"
-            value={fmtMoney(totalLost)}
+            value={<Hideable kind="money">{fmtMoney(totalLost)}</Hideable>}
             hint="reembolsos + chargebacks no período"
           />
           <StatCard
             label="Taxa de reembolso"
-            value={fmtPct(rate.rate)}
-            hint={`${rate.refunds} de ${rate.alunos} alunos (aquisição)`}
+            value={<Hideable kind="count">{fmtPct(rate.rate)}</Hideable>}
+            hint={<Hideable kind="count">{`${rate.refunds} de ${rate.alunos} alunos (aquisição)`}</Hideable>}
           />
         </div>
 
@@ -359,13 +360,15 @@ export default async function Page({
                           href={`/customers/${r.customers.id}`}
                           className="text-text hover:text-brand"
                         >
-                          {r.customers.email}
+                          <Hideable kind="email">{r.customers.email}</Hideable>
                         </Link>
                       ) : (
                         <span className="text-muted">(removido)</span>
                       )}
                       {r.customers?.phone && (
-                        <div className="text-2xs text-muted">{r.customers.phone}</div>
+                        <div className="text-2xs text-muted">
+                          <Hideable kind="phone">{r.customers.phone}</Hideable>
+                        </div>
                       )}
                     </td>
                     <td className="px-3 py-2.5">
@@ -378,7 +381,7 @@ export default async function Page({
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-right font-medium">
-                      {fmtMoney(r.amount)}
+                      <Hideable kind="money">{fmtMoney(r.amount)}</Hideable>
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="text-text2 text-xs">

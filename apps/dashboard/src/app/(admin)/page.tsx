@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, StatCard } from "@/components/page";
+import { Hideable } from "@/components/hideable";
 
 interface EventRow {
   id: string;
@@ -291,39 +292,39 @@ export default async function Page({
         <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard
             label="Receita no período"
-            value={fmtMoney(metrics.periodRevenue)}
+            value={<Hideable kind="money">{fmtMoney(metrics.periodRevenue)}</Hideable>}
             tone="accent"
             hint={periodLabel}
           />
           <StatCard
             label="Receita de renovações"
-            value={fmtMoney(metrics.periodRenewalRevenue)}
+            value={<Hideable kind="money">{fmtMoney(metrics.periodRenewalRevenue)}</Hideable>}
             hint={`${periodLabel} · ciclo > 1`}
           />
           <StatCard
             label="Receita acumulada"
-            value={fmtMoney(metrics.totalRevenue)}
+            value={<Hideable kind="money">{fmtMoney(metrics.totalRevenue)}</Hideable>}
             hint="Histórico completo"
           />
           <StatCard
             label="Novos alunos"
-            value={metrics.newStudents}
+            value={<Hideable kind="count">{String(metrics.newStudents)}</Hideable>}
             hint={period === "all" ? "Total de clientes únicos" : `Cadastrados ${periodLabel.toLowerCase()}`}
           />
           <StatCard
             label="Vendas no período"
-            value={metrics.periodSales}
+            value={<Hideable kind="count">{String(metrics.periodSales)}</Hideable>}
             hint={periodLabel}
           />
         </section>
 
         {/* Counts secundários do domínio */}
         <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <StatCard label="Produtos" value={counts.products} />
-          <StatCard label="Assinaturas" value={counts.subscriptions} />
-          <StatCard label="Acessos" value={counts.grants} />
-          <StatCard label="Sistemas" value={counts.systems} />
-          <StatCard label="Clientes" value={counts.customers} />
+          <StatCard label="Produtos" value={<Hideable kind="count">{String(counts.products)}</Hideable>} />
+          <StatCard label="Assinaturas" value={<Hideable kind="count">{String(counts.subscriptions)}</Hideable>} />
+          <StatCard label="Acessos" value={<Hideable kind="count">{String(counts.grants)}</Hideable>} />
+          <StatCard label="Sistemas" value={<Hideable kind="count">{String(counts.systems)}</Hideable>} />
+          <StatCard label="Clientes" value={<Hideable kind="count">{String(counts.customers)}</Hideable>} />
         </section>
 
         <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -354,12 +355,12 @@ export default async function Page({
                           <span className="chip text-2xs uppercase">{p.gateway}</span>
                         </div>
                         <div className="text-xs text-muted truncate mt-0.5">
-                          {p.customers?.email ?? "—"}
+                          <Hideable kind="email">{p.customers?.email ?? "—"}</Hideable>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-sm font-medium">
-                          R$ {p.amount.toFixed(2).replace(".", ",")}
+                          <Hideable kind="money">{`R$ ${p.amount.toFixed(2).replace(".", ",")}`}</Hideable>
                         </div>
                         <div className="text-2xs text-muted">
                           {new Date(p.created_at).toLocaleString("pt-BR", {

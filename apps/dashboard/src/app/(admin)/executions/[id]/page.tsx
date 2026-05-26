@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { Hideable } from "@/components/hideable";
 import { logAudit } from "@/lib/audit";
 import { PageBody, PageHeader } from "@/components/page";
 
@@ -324,9 +325,9 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
                   className="border border-line rounded p-3 hover:bg-surface2/30 transition"
                 >
                   <div className="label mb-1">Cliente</div>
-                  <div className="text-sm font-mono">{customer.email}</div>
+                  <div className="text-sm font-mono"><Hideable kind="email">{customer.email}</Hideable></div>
                   {customer.name && (
-                    <div className="text-xs text-muted mt-0.5">{customer.name}</div>
+                    <div className="text-xs text-muted mt-0.5"><Hideable kind="text">{customer.name}</Hideable></div>
                   )}
                 </Link>
               )}
@@ -335,7 +336,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
                   <div className="label mb-1">Compra</div>
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm">{purchase.products?.name ?? "—"}</div>
-                    <div className="text-sm tabular-nums">{fmtMoney(Number(purchase.amount))}</div>
+                    <div className="text-sm tabular-nums"><Hideable kind="money">{fmtMoney(Number(purchase.amount))}</Hideable></div>
                   </div>
                   <div className="text-2xs text-muted mt-1 uppercase">{purchase.status}</div>
                 </div>

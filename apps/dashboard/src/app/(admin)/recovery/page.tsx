@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin, canAccessSection } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, StatCard } from "@/components/page";
+import { Hideable } from "@/components/hideable";
 
 // ── Tipos ────────────────────────────────────────────────────
 type LostKind =
@@ -257,22 +258,22 @@ export default async function Page({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard
             label="Em aberto"
-            value={fmtMoney(pendingValue)}
-            hint={`${pendingRows.length} aguardando pagamento`}
+            value={<Hideable kind="money">{fmtMoney(pendingValue)}</Hideable>}
+            hint={<Hideable kind="count">{`${pendingRows.length} aguardando pagamento`}</Hideable>}
           />
           <StatCard
             label="Expirado"
-            value={fmtMoney(expiredValue)}
-            hint={`${expiredRows.length} expiraram sem pagar`}
+            value={<Hideable kind="money">{fmtMoney(expiredValue)}</Hideable>}
+            hint={<Hideable kind="count">{`${expiredRows.length} expiraram sem pagar`}</Hideable>}
           />
           <StatCard
             label="Carrinho abandonado"
-            value={String(abandonedRows.length)}
+            value={<Hideable kind="count">{String(abandonedRows.length)}</Hideable>}
             hint="saíram sem gerar pagamento"
           />
           <StatCard
             label="Total perdido"
-            value={fmtMoney(totalLost)}
+            value={<Hideable kind="money">{fmtMoney(totalLost)}</Hideable>}
             hint="expirado + abandonado no período"
           />
         </div>
@@ -352,14 +353,18 @@ export default async function Page({
                             href={`/customers/${r.customer_id}`}
                             className="text-text hover:text-brand"
                           >
-                            {r.email ?? "(sem email)"}
+                            <Hideable kind="email">{r.email ?? "(sem email)"}</Hideable>
                           </Link>
                         ) : (
-                          <span className="text-text">{r.email ?? "(sem email)"}</span>
+                          <span className="text-text">
+                            <Hideable kind="email">{r.email ?? "(sem email)"}</Hideable>
+                          </span>
                         )}
                       </div>
                       {r.phone && (
-                        <div className="text-2xs text-muted">{r.phone}</div>
+                        <div className="text-2xs text-muted">
+                          <Hideable kind="phone">{r.phone}</Hideable>
+                        </div>
                       )}
                     </td>
                     <td className="px-3 py-2.5">
@@ -369,7 +374,7 @@ export default async function Page({
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-right font-medium">
-                      {fmtMoney(r.amount_cents)}
+                      <Hideable kind="money">{fmtMoney(r.amount_cents)}</Hideable>
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="text-text2 text-xs">

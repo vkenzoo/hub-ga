@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin, canAccessSection } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, StatCard } from "@/components/page";
+import { Hideable } from "@/components/hideable";
 import { RevenueChart, PaymentMethodChart, PaymentPie } from "./charts";
 
 // Taxa de gateway aplicada sobre faturamento bruto (fórmula da Margem de Contribuição)
@@ -312,32 +313,32 @@ export default async function Page({
 
         {/* KPIs principais */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="Faturamento" value={fmtMoney(receita)} tone="accent" hint="Vendas pagas" />
-          <StatCard label="Reembolsos" value={fmtMoney(reembolsos)} hint={fmtPct(taxaReembolso) + " do faturamento"} />
+          <StatCard label="Faturamento" value={<Hideable kind="money">{fmtMoney(receita)}</Hideable>} tone="accent" hint="Vendas pagas" />
+          <StatCard label="Reembolsos" value={<Hideable kind="money">{fmtMoney(reembolsos)}</Hideable>} hint={<Hideable kind="count">{fmtPct(taxaReembolso) + " do faturamento"}</Hideable>} />
           <StatCard
             label="Margem de contribuição"
-            value={fmtMoney(margem)}
-            hint={`${fmtPct(margemPct)} · taxa ${(GATEWAY_FEE_RATE * 100).toFixed(1)}%`}
+            value={<Hideable kind="money">{fmtMoney(margem)}</Hideable>}
+            hint={<Hideable kind="count">{`${fmtPct(margemPct)} · taxa ${(GATEWAY_FEE_RATE * 100).toFixed(1)}%`}</Hideable>}
           />
-          <StatCard label="Compradores únicos" value={fmtNum(compradores)} hint="Cliente único no período" />
+          <StatCard label="Compradores únicos" value={<Hideable kind="count">{fmtNum(compradores)}</Hideable>} hint="Cliente único no período" />
         </section>
 
         {/* KPIs secundários */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="Ticket médio (TMF)" value={fmtMoney(tmf)} hint="Receita ÷ compradores" />
+          <StatCard label="Ticket médio (TMF)" value={<Hideable kind="money">{fmtMoney(tmf)}</Hideable>} hint="Receita ÷ compradores" />
           <StatCard
             label="Investimento"
-            value={investimento > 0 ? fmtMoney(investimento) : "—"}
+            value={investimento > 0 ? <Hideable kind="money">{fmtMoney(investimento)}</Hideable> : "—"}
             hint="Conecte Meta Ads"
           />
           <StatCard
             label="ROAS"
-            value={roas != null ? roas.toFixed(2).replace(".", ",") : "—"}
+            value={roas != null ? <Hideable kind="count">{roas.toFixed(2).replace(".", ",")}</Hideable> : "—"}
             hint="Receita ÷ investimento"
           />
           <StatCard
             label="CPA"
-            value={cpa != null ? fmtMoney(cpa) : "—"}
+            value={cpa != null ? <Hideable kind="money">{fmtMoney(cpa)}</Hideable> : "—"}
             hint="Investimento ÷ compradores"
           />
         </section>
@@ -383,15 +384,19 @@ export default async function Page({
                     return (
                       <tr key={i} className="hover:bg-surface2/30 transition">
                         <td className="px-4 py-2.5 text-sm">{p.name}</td>
-                        <td className="px-4 py-2.5 text-right text-xs tabular-nums">{fmtNum(p.vendas)}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums">{fmtMoney(p.receita)}</td>
+                        <td className="px-4 py-2.5 text-right text-xs tabular-nums">
+                          <Hideable kind="count">{fmtNum(p.vendas)}</Hideable>
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums">
+                          <Hideable kind="money">{fmtMoney(p.receita)}</Hideable>
+                        </td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-xs text-muted">
-                          {p.reembolsos > 0 ? fmtMoney(p.reembolsos) : "—"}
+                          {p.reembolsos > 0 ? <Hideable kind="money">{fmtMoney(p.reembolsos)}</Hideable> : "—"}
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums">
                           {pct > 0 ? (
                             <span className={pct > 10 ? "text-warn" : "text-text2"}>
-                              {fmtPct(pct)}
+                              <Hideable kind="count">{fmtPct(pct)}</Hideable>
                             </span>
                           ) : (
                             <span className="text-muted">—</span>

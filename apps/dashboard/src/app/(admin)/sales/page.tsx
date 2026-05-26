@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader } from "@/components/page";
+import { Hideable } from "@/components/hideable";
 
 // ── Tipos ────────────────────────────────────────────────────
 interface SaleRow {
@@ -172,12 +173,12 @@ export default async function Page({
           <div className="flex items-center gap-2">
             <span className="chip">
               <span className="dot bg-accent" />
-              {fmtMoney(totalPaid)} pagos
+              <Hideable kind="money">{fmtMoney(totalPaid)}</Hideable> pagos
             </span>
             {totalRefunded > 0 && (
               <span className="chip text-warn">
                 <span className="dot bg-warn" />
-                {fmtMoney(totalRefunded)} estornados
+                <Hideable kind="money">{fmtMoney(totalRefunded)}</Hideable> estornados
               </span>
             )}
           </div>
@@ -280,13 +281,15 @@ export default async function Page({
                               title="Abrir card do cliente"
                             >
                               {s.customers.name && (
-                                <div className="text-text">{s.customers.name}</div>
+                                <div className="text-text"><Hideable kind="text">{s.customers.name}</Hideable></div>
                               )}
                               <div className={s.customers.name ? "text-xs text-muted" : ""}>
-                                {s.customers.email}
+                                <Hideable kind="email">{s.customers.email}</Hideable>
                               </div>
                               {s.customers.phone && (
-                                <div className="text-xs text-muted tabular-nums">{s.customers.phone}</div>
+                                <div className="text-xs text-muted tabular-nums">
+                                  <Hideable kind="phone">{s.customers.phone}</Hideable>
+                                </div>
                               )}
                             </Link>
                           ) : (
@@ -294,7 +297,7 @@ export default async function Page({
                           )}
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums">
-                          {fmtMoney(s.amount)}
+                          <Hideable kind="money">{fmtMoney(s.amount)}</Hideable>
                         </td>
                         <td className="px-4 py-2.5">
                           <span className="chip">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, StatCard } from "@/components/page";
+import { Hideable } from "@/components/hideable";
 
 interface SubscriptionRow {
   id: string;
@@ -111,14 +112,14 @@ export default async function Page({
 
       <PageBody>
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="Ativas" value={active.length} tone="accent" />
+          <StatCard label="Ativas" value={<Hideable kind="count">{String(active.length)}</Hideable>} tone="accent" />
           <StatCard
             label="Renovam em ≤7d"
-            value={renewingSoon.length}
+            value={<Hideable kind="count">{String(renewingSoon.length)}</Hideable>}
             hint={renewingSoon.length > 0 ? "Acompanhar de perto" : undefined}
           />
-          <StatCard label="Atrasadas" value={pastDue.length} hint={pastDue.length > 0 ? "Cartão recusado / pix vencido" : undefined} />
-          <StatCard label="Canceladas" value={cancelled.length} />
+          <StatCard label="Atrasadas" value={<Hideable kind="count">{String(pastDue.length)}</Hideable>} hint={pastDue.length > 0 ? "Cartão recusado / pix vencido" : undefined} />
+          <StatCard label="Canceladas" value={<Hideable kind="count">{String(cancelled.length)}</Hideable>} />
         </section>
 
         {/* Filtros */}
@@ -183,10 +184,10 @@ export default async function Page({
                               className="block hover:text-brand transition"
                             >
                               {s.customers.name && (
-                                <div className="text-text">{s.customers.name}</div>
+                                <div className="text-text"><Hideable kind="text">{s.customers.name}</Hideable></div>
                               )}
                               <div className={s.customers.name ? "text-xs text-muted" : ""}>
-                                {s.customers.email}
+                                <Hideable kind="email">{s.customers.email}</Hideable>
                               </div>
                             </Link>
                           ) : (

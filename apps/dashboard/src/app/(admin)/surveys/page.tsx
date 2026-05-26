@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin, canAccessSection } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, StatCard } from "@/components/page";
+import { Hideable } from "@/components/hideable";
 
 interface SurveyRow {
   id: string;
@@ -124,22 +125,22 @@ export default async function Page({
       <PageBody>
         {/* KPIs */}
         <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <StatCard label="Respostas (últimas 500)" value={totalResponses} />
-          <StatCard label="Únicas por contato" value={uniqueByContact} />
+          <StatCard label="Respostas (últimas 500)" value={<Hideable kind="count">{String(totalResponses)}</Hideable>} />
+          <StatCard label="Únicas por contato" value={<Hideable kind="count">{String(uniqueByContact)}</Hideable>} />
           <StatCard
             label="Respostas válidas"
-            value={matchedCustomers}
+            value={<Hideable kind="count">{String(matchedCustomers)}</Hideable>}
             tone="accent"
             hint="Email ou telefone bate com cliente da base"
           />
           <StatCard
             label="% Conversão"
-            value={fmtPct(conversionRate)}
+            value={<Hideable kind="count">{fmtPct(conversionRate)}</Hideable>}
             hint="Respostas válidas ÷ únicas por contato"
           />
           <StatCard
             label="Não classificados"
-            value={byQual._none ?? 0}
+            value={<Hideable kind="count">{String(byQual._none ?? 0)}</Hideable>}
             hint="Compradores sem regra casando"
           />
         </section>
@@ -240,15 +241,25 @@ export default async function Page({
                               href={`/customers/${r.customers.id}`}
                               className="hover:text-brand transition"
                             >
-                              <div className="text-xs">{r.email ?? "—"}</div>
+                              <div className="text-xs">
+                                <Hideable kind="email">{r.email ?? "—"}</Hideable>
+                              </div>
                               {r.customers.name && (
-                                <div className="text-2xs text-muted">{r.customers.name}</div>
+                                <div className="text-2xs text-muted">
+                                  <Hideable kind="text">{r.customers.name}</Hideable>
+                                </div>
                               )}
                             </Link>
                           ) : (
                             <div>
-                              <div className="text-xs">{r.email ?? "—"}</div>
-                              {r.phone && <div className="text-2xs text-muted">{r.phone}</div>}
+                              <div className="text-xs">
+                                <Hideable kind="email">{r.email ?? "—"}</Hideable>
+                              </div>
+                              {r.phone && (
+                                <div className="text-2xs text-muted">
+                                  <Hideable kind="phone">{r.phone}</Hideable>
+                                </div>
+                              )}
                             </div>
                           )}
                         </td>

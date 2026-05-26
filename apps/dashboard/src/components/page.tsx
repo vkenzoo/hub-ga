@@ -3,7 +3,7 @@ export function PageHeader({
   subtitle,
   right,
 }: {
-  title: string;
+  title: React.ReactNode;
   subtitle?: React.ReactNode;
   right?: React.ReactNode;
 }) {
@@ -35,8 +35,8 @@ export function StatCard({
   tone,
 }: {
   label: string;
-  value: string | number;
-  hint?: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
   tone?: "default" | "accent";
 }) {
   return (

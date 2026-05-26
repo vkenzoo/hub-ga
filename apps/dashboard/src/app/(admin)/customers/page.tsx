@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader } from "@/components/page";
+import { Hideable } from "@/components/hideable";
 
 interface CustomerListRow {
   id: string;
@@ -138,8 +139,8 @@ export default async function Page({
                   <tr key={c.id} className="hover:bg-surface2 transition">
                     <td className="px-4 py-3">
                       <Link href={`/customers/${c.id}`} className="block">
-                        <div className="text-text">{c.email}</div>
-                        {c.name && <div className="text-xs text-muted">{c.name}</div>}
+                        <div className="text-text"><Hideable kind="email">{c.email}</Hideable></div>
+                        {c.name && <div className="text-xs text-muted"><Hideable kind="text">{c.name}</Hideable></div>}
                       </Link>
                     </td>
                     <td className="px-4 py-3">
@@ -149,14 +150,16 @@ export default async function Page({
                         <span className="text-muted">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{c.total_purchases}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
-                      {formatMoney(c.total_spent)}
+                      <Hideable kind="count">{String(c.total_purchases)}</Hideable>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      <Hideable kind="money">{formatMoney(c.total_spent)}</Hideable>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {c.active_grants > 0 ? (
                         <span className="chip">
-                          <span className="dot bg-accent" /> {c.active_grants}
+                          <span className="dot bg-accent" /> <Hideable kind="count">{String(c.active_grants)}</Hideable>
                         </span>
                       ) : (
                         <span className="text-muted text-xs">nenhum</span>
