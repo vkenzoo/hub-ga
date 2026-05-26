@@ -5,7 +5,8 @@ import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, Field } from "@/components/page";
 import { SubmitButton } from "@/components/submit-button";
 import { SecretInput } from "@/components/secret-input";
-import { connectMetaBM, healthcheckMetaBM, deleteMetaBM, syncMetaBM } from "./actions";
+import { connectMetaBM } from "./actions";
+import { ConnectionActions } from "./connection-actions";
 import { fmtDate, statusChip } from "../helpers";
 import { validationErrorLabel, type ValidationError } from "@/lib/meta/validate-token";
 
@@ -200,35 +201,7 @@ export default async function Page({
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <form action={syncMetaBM}>
-                          <input type="hidden" name="id" value={c.id} />
-                          <button
-                            className="btn btn-sm btn-primary"
-                            title="Puxa últimos 30 dias de insights da Marketing API"
-                          >
-                            ⟳ Sincronizar
-                          </button>
-                        </form>
-                        <form action={healthcheckMetaBM}>
-                          <input type="hidden" name="id" value={c.id} />
-                          <button
-                            className="btn btn-sm btn-ghost"
-                            title="Re-valida token e re-importa contas"
-                          >
-                            ↻ Verificar
-                          </button>
-                        </form>
-                        <form action={deleteMetaBM}>
-                          <input type="hidden" name="id" value={c.id} />
-                          <button
-                            className="btn btn-sm btn-ghost text-muted hover:text-danger"
-                            title="Remover"
-                          >
-                            ✕
-                          </button>
-                        </form>
-                      </div>
+                      <ConnectionActions connectionId={c.id} />
                     </div>
                   </li>
                 );

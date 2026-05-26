@@ -50,7 +50,7 @@ interface InsightsResp {
   paging?: { next?: string; cursors?: { after?: string } };
 }
 
-interface SyncResult {
+export interface SyncResult {
   ok: boolean;
   ad_accounts_processed: number;
   rows_upserted: number;
