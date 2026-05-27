@@ -4,6 +4,7 @@ import { MAX_JOB_ATTEMPTS } from "@hub/shared";
 import { createSystemUser } from "@/lib/provisioning/create-system-user";
 import { logEvent } from "@/lib/logger";
 import { safeEqual } from "@/lib/hmac";
+import { dispatchOutboundWebhook, type OutboundEvent } from "@/lib/outbound/dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +46,18 @@ export async function GET(req: Request) {
         const payload = job.payload as { systemSlug: string; email: string };
         const result = await createSystemUser(payload.systemSlug, payload.email);
         if (result.error) throw new Error(result.error);
+        await hub
+          .from("pending_jobs")
+          .update({ status: "done", completed_at: new Date().toISOString() })
+          .eq("id", id);
+        done++;
+      } else if (job.kind === "outbound_dispatch") {
+        const payload = job.payload as {
+          webhook_id: string;
+          event: OutboundEvent;
+          body: { event: OutboundEvent; occurred_at: string; data: Record<string, unknown> };
+        };
+        await dispatchOutboundWebhook(hub, payload);
         await hub
           .from("pending_jobs")
           .update({ status: "done", completed_at: new Date().toISOString() })

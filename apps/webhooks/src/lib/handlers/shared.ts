@@ -8,6 +8,7 @@ import {
 } from "../provisioning";
 import { logEvent } from "../logger";
 import { resolveSaleAttribution, persistAttribution } from "./resolve-attribution";
+import { enqueueOutboundDispatches, type OutboundEvent } from "../outbound/dispatch";
 
 export type Gateway = "assiny" | "hotmart";
 export type PurchaseStatus = "paid" | "refunded" | "chargeback" | "pending";
@@ -416,6 +417,48 @@ export async function recordPurchase(
       .catch((err) => console.error("[recordPurchase] attribution failed:", err));
   }
 
+  // Outbound webhooks — enqueue dispatches em pending_jobs.
+  // Cron processa em <5min com retry exponencial.
+  const outboundEvent: OutboundEvent | null = (() => {
+    switch (p.eventKind) {
+      case "purchase_paid": return "purchase.paid";
+      case "purchase_refunded": return "purchase.refunded";
+      case "purchase_chargeback": return "purchase.chargeback";
+      case "subscription_renewed": return "subscription.renewed";
+      default: return null;
+    }
+  })();
+
+  if (outboundEvent) {
+    enqueueOutboundDispatches(hub, outboundEvent, {
+      purchase: {
+        id: purchaseId,
+        amount: p.amount,
+        status: p.status,
+        gateway: p.gateway,
+        gateway_event_id: p.gatewayEventId,
+        payment_method: p.paymentMethod ?? null,
+        utm_source: p.utm?.source ?? null,
+        utm_medium: p.utm?.medium ?? null,
+        utm_campaign: p.utm?.campaign ?? null,
+        utm_content: p.utm?.content ?? null,
+        utm_term: p.utm?.term ?? null,
+        affiliate_id: p.affiliateId ?? null,
+        subscription_cycle: p.subscriptionCycle ?? null,
+      },
+      customer: {
+        id: customerId,
+        email: p.customer.email,
+        name: p.customer.name ?? null,
+        phone: p.customer.phone ?? null,
+      },
+      product: {
+        id: product.id,
+        name_hint: p.productNameHint ?? null,
+      },
+    }).catch((err) => console.error("[recordPurchase] enqueueOutbound failed:", err));
+  }
+
   return { skipped: false, customerId, purchaseId };
 }
 
@@ -468,6 +511,24 @@ export async function handleSubscriptionStatusEvent(
   await logEvent(hub, "webhook.subscription.status_change", {
     payload: { gateway: e.gateway, gatewaySubscriptionId: e.gatewaySubscriptionId, newStatus: e.newStatus },
   });
+
+  // Outbound dispatch
+  const outboundEvent: OutboundEvent | null =
+    e.newStatus === "past_due" ? "subscription.past_due"
+    : e.newStatus === "cancelled" ? "subscription.cancelled"
+    : null;
+
+  if (outboundEvent) {
+    enqueueOutboundDispatches(hub, outboundEvent, {
+      subscription: {
+        id: sub.id,
+        gateway: e.gateway,
+        gateway_subscription_id: e.gatewaySubscriptionId,
+        status: e.newStatus,
+        current_period_end: e.currentPeriodEnd ?? sub.current_period_end ?? null,
+      },
+    }).catch((err) => console.error("[subStatusEvent] enqueueOutbound failed:", err));
+  }
 
   return { ok: true };
 }
