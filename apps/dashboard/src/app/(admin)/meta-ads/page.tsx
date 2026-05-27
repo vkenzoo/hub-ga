@@ -4,6 +4,7 @@ import { requireAdmin, canAccessSection } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, StatCard } from "@/components/page";
 import { Hideable } from "@/components/hideable";
+import { ReattributeButton } from "./reattribute-button";
 
 // ── Tipos ────────────────────────────────────────────────────
 interface InsightRow {
@@ -277,6 +278,7 @@ export default async function Page({
         subtitle="Spend, impressões e cliques das campanhas conectadas via Marketing API."
         right={
           <div className="flex flex-wrap gap-1.5">
+            <ReattributeButton />
             {(["today", "7d", "30d", "month", "all"] as Period[]).map((p) => {
               const label = p === "today" ? "Hoje" : p === "month" ? "Mês" : p === "all" ? "Tudo" : p;
               const active = period === p;
