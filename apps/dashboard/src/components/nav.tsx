@@ -62,6 +62,9 @@ const I = {
   refunds: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5h-2"/></svg>
   ),
+  metaAds: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V14H8v-2h2V9.5C10 7.57 11.57 6 13.5 6H16v2h-2c-.55 0-1 .45-1 1v3h3l-.5 2H13v7.95c5.05-.5 9-4.76 9-9.95C22 6.48 17.52 2 12 2z"/></svg>
+  ),
 };
 
 type Section =
@@ -78,7 +81,8 @@ type Section =
   | "guides"
   | "surveys"
   | "recovery"
-  | "refunds";
+  | "refunds"
+  | "meta_ads";
 
 interface ItemWithRole extends Item {
   section?: Section;
@@ -88,6 +92,7 @@ interface ItemWithRole extends Item {
 const ITEMS: ItemWithRole[] = [
   { href: "/", label: "Resumo", icon: I.resumo, section: "home" },
   { href: "/acquisition", label: "Aquisição", icon: I.acquisition, section: "acquisition" },
+  { href: "/meta-ads", label: "Meta Ads", icon: I.metaAds, section: "meta_ads" },
   { href: "/surveys", label: "Pesquisa", icon: I.surveys, section: "surveys" },
   { href: "/sales", label: "Vendas", icon: I.sales, section: "sales" },
   { href: "/recovery", label: "Recuperação", icon: I.recovery, section: "recovery" },
