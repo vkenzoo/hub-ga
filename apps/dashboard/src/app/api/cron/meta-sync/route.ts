@@ -32,9 +32,9 @@ export async function GET(req: Request) {
   const sb = createSupabaseAdmin();
 
   try {
-    // Sync os últimos 7 dias toda chamada (compromisso entre frescor e custo).
-    // Backfill de 30 dias só na 1ª conexão (no flow de connect).
-    const result = await syncAllMetaConnections(sb, 7);
+    // Sync os últimos 3 dias a cada 5min (overlap pra cobrir correções tardias da Meta).
+    // Backfill de 30 dias só na 1ª conexão (flow de connect) ou via botão manual.
+    const result = await syncAllMetaConnections(sb, 3);
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     console.error("[meta-sync cron] failed:", e);
