@@ -2,6 +2,13 @@ import Link from "next/link";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader } from "@/components/page";
 import { Hideable } from "@/components/hideable";
+import { Pagination } from "@/components/pagination";
+import {
+  applyCursor,
+  decodeCursor,
+  parsePageSize,
+  sliceWithCursor,
+} from "@/lib/pagination";
 
 // ── Tipos ────────────────────────────────────────────────────
 interface SaleRow {
@@ -108,8 +115,13 @@ async function listSales(filters: {
   q?: string;
   gateway?: string;
   status?: string;
-}): Promise<SaleRow[]> {
+  cursor?: string;
+  size: number;
+}): Promise<{ rows: SaleRow[]; nextCursor: string | null }> {
   const sb = createSupabaseAdmin();
+  // Quando tem filtro por texto, busca um pouco mais (até 500) pra filtrar client-side
+  // e mesmo assim manter paginação. Filtro de texto é um caso minoritário.
+  const fetchSize = filters.q ? 500 : filters.size + 1;
   let query = sb
     .from("purchases")
     .select(
@@ -120,7 +132,8 @@ async function listSales(filters: {
        products(id, name)`,
     )
     .order("created_at", { ascending: false })
-    .limit(200);
+    .order("id", { ascending: false })
+    .limit(fetchSize);
 
   if (filters.gateway && filters.gateway !== "all") {
     query = query.eq("gateway", filters.gateway);
@@ -129,20 +142,23 @@ async function listSales(filters: {
     query = query.eq("status", filters.status);
   }
 
-  const { data } = await query;
-  let rows = (data ?? []) as unknown as SaleRow[];
+  const cursor = decodeCursor(filters.cursor);
+  query = applyCursor(query, cursor);
 
-  // Filtro por texto (email/nome/produto) feito client-side pra evitar joins complicados
+  const { data } = await query;
+  let raw = (data ?? []) as unknown as SaleRow[];
+
   if (filters.q) {
     const ql = filters.q.toLowerCase();
-    rows = rows.filter(
+    raw = raw.filter(
       (r) =>
         r.customers?.email.toLowerCase().includes(ql) ||
         r.customers?.name?.toLowerCase().includes(ql) ||
         r.products?.name.toLowerCase().includes(ql),
     );
   }
-  return rows;
+
+  return sliceWithCursor(raw, filters.size);
 }
 
 // ── Página ─────────────────────────────────────────────────
@@ -154,12 +170,21 @@ export default async function Page({
     gateway?: string;
     status?: string;
     cols?: string | string[];
+    cursor?: string;
+    size?: string;
   }>;
 }) {
   const sp = await searchParams;
   const cols = parseCols(sp.cols);
   const colsSet = new Set<string>(cols);
-  const sales = await listSales({ q: sp.q, gateway: sp.gateway, status: sp.status });
+  const size = parsePageSize(sp.size);
+  const { rows: sales, nextCursor } = await listSales({
+    q: sp.q,
+    gateway: sp.gateway,
+    status: sp.status,
+    cursor: sp.cursor,
+    size,
+  });
 
   const totalPaid = sales.filter((s) => s.status === "paid").reduce((sum, s) => sum + Number(s.amount), 0);
   const totalRefunded = sales.filter((s) => s.status === "refunded").reduce((sum, s) => sum + Number(s.amount), 0);
@@ -237,10 +262,10 @@ export default async function Page({
         {/* Tabela */}
         <div className="card overflow-hidden">
           <div className="px-4 py-3 border-b border-line flex items-center justify-between">
-            <h2 className="text-sm font-medium">
-              {sales.length} venda{sales.length === 1 ? "" : "s"}
-            </h2>
-            <span className="text-2xs text-muted uppercase tracking-wider">Últimas 200</span>
+            <h2 className="text-sm font-medium">Vendas</h2>
+            <span className="text-2xs text-muted uppercase tracking-wider">
+              {sp.cursor ? "Página interna" : "Mais recentes"}
+            </span>
           </div>
 
           {sales.length === 0 ? (
@@ -346,6 +371,22 @@ export default async function Page({
                 </tbody>
               </table>
             </div>
+          )}
+
+          {sales.length > 0 && (
+            <Pagination
+              basePath="/sales"
+              preservedParams={{
+                q: sp.q,
+                gateway: sp.gateway,
+                status: sp.status,
+                cols: Array.isArray(sp.cols) ? sp.cols.join(",") : sp.cols,
+              }}
+              pageSize={size}
+              nextCursor={nextCursor}
+              hasPrev={!!sp.cursor}
+              rowsCount={sales.length}
+            />
           )}
         </div>
       </PageBody>
