@@ -39,7 +39,11 @@ interface CampaignAgg {
   ads_count: number;
   days: number;
   classification: "acquisition" | "monetization" | "other" | null;
+  // Atribuição UTM
+  revenue_cents: number;
+  sales_count: number;
 }
+
 
 type Period = "today" | "7d" | "30d" | "month" | "all" | "custom";
 type Classification = "all" | "acquisition" | "monetization" | "other" | "unclassified";
@@ -163,8 +167,52 @@ export default async function Page({
     q = q.is("classification", null);
   }
 
-  const { data: rowsRaw } = await q;
+  // Atribuições UTM no período (matched=true, is_active=true)
+  let attrQ = sb
+    .from("utm_sales_attribution")
+    .select(`
+      purchase_id, campaign_id, match_confidence,
+      purchases!inner(amount, status, created_at)
+    `)
+    .eq("matched", true)
+    .eq("is_active", true)
+    .eq("purchases.status", "paid")
+    .limit(50000);
+  if (start) attrQ = attrQ.gte("purchases.created_at", start.toISOString());
+  if (end) attrQ = attrQ.lt("purchases.created_at", end.toISOString());
+
+  const [{ data: rowsRaw }, { data: attrRaw }] = await Promise.all([q, attrQ]);
   const rows = (rowsRaw ?? []) as InsightRow[];
+  // Supabase retorna join 1:1 como array. Acessa [0] pra pegar a row.
+  const attrs = (attrRaw ?? []) as unknown as Array<{
+    purchase_id: string;
+    campaign_id: string | null;
+    match_confidence: number | null;
+    purchases: { amount: number; status: string; created_at: string } | Array<{ amount: number; status: string; created_at: string }>;
+  }>;
+
+  // Agrega receita atribuída por campaign_id
+  const revenueByCampaign = new Map<string, { revenue_cents: number; sales_count: number }>();
+  for (const a of attrs) {
+    if (!a.campaign_id) continue;
+    const p = Array.isArray(a.purchases) ? a.purchases[0] : a.purchases;
+    const amount = Number(p?.amount ?? 0);
+    if (!revenueByCampaign.has(a.campaign_id)) {
+      revenueByCampaign.set(a.campaign_id, { revenue_cents: 0, sales_count: 0 });
+    }
+    const r = revenueByCampaign.get(a.campaign_id)!;
+    r.revenue_cents += Math.round(amount * 100);  // purchases.amount em reais → centavos
+    r.sales_count += 1;
+  }
+
+  const totalRevenueCents = Array.from(revenueByCampaign.values()).reduce(
+    (s, r) => s + r.revenue_cents,
+    0,
+  );
+  const totalSales = Array.from(revenueByCampaign.values()).reduce(
+    (s, r) => s + r.sales_count,
+    0,
+  );
 
   // ── KPIs gerais ────────────────────────────────────────
   const totalSpendCents = rows.reduce((s, r) => s + (r.spend_cents ?? 0), 0);
@@ -179,6 +227,7 @@ export default async function Page({
   for (const r of rows) {
     const key = r.campaign_id;
     if (!campMap.has(key)) {
+      const rev = revenueByCampaign.get(key);
       campMap.set(key, {
         campaign_id: r.campaign_id,
         campaign_name: r.campaign_name ?? "(sem nome)",
@@ -189,6 +238,8 @@ export default async function Page({
         ads_count: 0,
         days: 0,
         classification: r.classification,
+        revenue_cents: rev?.revenue_cents ?? 0,
+        sales_count: rev?.sales_count ?? 0,
       });
     }
     const c = campMap.get(key)!;
@@ -264,12 +315,34 @@ export default async function Page({
 
       <PageBody>
         {/* Stats */}
-        <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <StatCard label="Investimento" value={<Hideable kind="money">{fmtMoney(totalSpendCents)}</Hideable>} tone="accent" />
-          <StatCard label="Impressões" value={<Hideable kind="count">{fmtNum(totalImpressions)}</Hideable>} />
-          <StatCard label="Cliques" value={<Hideable kind="count">{fmtNum(totalClicks)}</Hideable>} hint={`CTR ${fmtPct(ctr)}`} />
-          <StatCard label="CPC médio" value={<Hideable kind="money">{fmtMoney(Math.round(cpc))}</Hideable>} />
-          <StatCard label="CPM médio" value={<Hideable kind="money">{fmtMoney(Math.round(cpm))}</Hideable>} />
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard
+            label="Investimento"
+            value={<Hideable kind="money">{fmtMoney(totalSpendCents)}</Hideable>}
+            tone="accent"
+            hint={`${fmtNum(totalImpressions)} impressões`}
+          />
+          <StatCard
+            label="Receita atribuída"
+            value={<Hideable kind="money">{fmtMoney(totalRevenueCents)}</Hideable>}
+            hint={<Hideable kind="count">{`${totalSales} ${totalSales === 1 ? "venda" : "vendas"}`}</Hideable>}
+          />
+          <StatCard
+            label="ROAS"
+            value={
+              totalSpendCents > 0 ? (
+                <Hideable kind="count">
+                  {(totalRevenueCents / totalSpendCents).toFixed(2).replace(".", ",")}
+                </Hideable>
+              ) : "—"
+            }
+            hint="Receita ÷ Spend"
+          />
+          <StatCard
+            label="CPC médio"
+            value={<Hideable kind="money">{fmtMoney(Math.round(cpc))}</Hideable>}
+            hint={`CTR ${fmtPct(ctr)} · CPM ${fmtMoney(Math.round(cpm))}`}
+          />
         </section>
 
         {/* Filtros: classificação + ad account */}
@@ -324,14 +397,14 @@ export default async function Page({
               <tr>
                 <th className="px-3 py-2.5 font-normal">Campanha</th>
                 <th className="px-3 py-2.5 font-normal">Classif.</th>
-                <th className="px-3 py-2.5 font-normal">Conta</th>
                 <th className="px-3 py-2.5 font-normal text-right">Spend</th>
+                <th className="px-3 py-2.5 font-normal text-right">Receita</th>
+                <th className="px-3 py-2.5 font-normal text-right">ROAS</th>
+                <th className="px-3 py-2.5 font-normal text-right">Vendas</th>
                 <th className="px-3 py-2.5 font-normal text-right">Impressões</th>
                 <th className="px-3 py-2.5 font-normal text-right">Cliques</th>
                 <th className="px-3 py-2.5 font-normal text-right">CTR</th>
                 <th className="px-3 py-2.5 font-normal text-right">CPC</th>
-                <th className="px-3 py-2.5 font-normal text-right">Ads</th>
-                <th className="px-3 py-2.5 font-normal text-right">Dias</th>
               </tr>
             </thead>
             <tbody>
@@ -346,6 +419,7 @@ export default async function Page({
                 const chip = classificationChip(c.classification);
                 const campCtr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
                 const campCpc = c.clicks > 0 ? c.spend_cents / c.clicks : 0;
+                const campRoas = c.spend_cents > 0 ? c.revenue_cents / c.spend_cents : null;
                 return (
                   <tr
                     key={c.campaign_id}
@@ -353,7 +427,9 @@ export default async function Page({
                   >
                     <td className="px-3 py-2.5">
                       <div className="text-text leading-snug">{c.campaign_name}</div>
-                      <div className="text-2xs text-muted font-mono mt-0.5">{c.campaign_id}</div>
+                      <div className="text-2xs text-muted font-mono mt-0.5">
+                        {c.ad_account_name ?? c.campaign_id}
+                      </div>
                     </td>
                     <td className="px-3 py-2.5">
                       <span className="chip">
@@ -361,11 +437,29 @@ export default async function Page({
                         {chip.label}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-text2 text-xs">
-                      {c.ad_account_name ?? "—"}
-                    </td>
                     <td className="px-3 py-2.5 text-right font-medium">
                       <Hideable kind="money">{fmtMoney(c.spend_cents)}</Hideable>
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {c.revenue_cents > 0 ? (
+                        <span className="text-accent font-medium">
+                          <Hideable kind="money">{fmtMoney(c.revenue_cents)}</Hideable>
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {campRoas != null ? (
+                        <span className={campRoas >= 1 ? "text-accent" : "text-warn"}>
+                          <Hideable kind="count">{campRoas.toFixed(2).replace(".", ",")}</Hideable>
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-text2">
+                      <Hideable kind="count">{String(c.sales_count)}</Hideable>
                     </td>
                     <td className="px-3 py-2.5 text-right text-text2">
                       <Hideable kind="count">{fmtNum(c.impressions)}</Hideable>
@@ -378,12 +472,6 @@ export default async function Page({
                     </td>
                     <td className="px-3 py-2.5 text-right text-text2">
                       <Hideable kind="money">{fmtMoney(Math.round(campCpc))}</Hideable>
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-muted">
-                      <Hideable kind="count">{String(c.ads_count)}</Hideable>
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-muted">
-                      <Hideable kind="count">{String(c.days)}</Hideable>
                     </td>
                   </tr>
                 );

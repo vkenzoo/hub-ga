@@ -7,6 +7,7 @@ import {
   adjustGrantsOnSubscriptionStatus,
 } from "../provisioning";
 import { logEvent } from "../logger";
+import { resolveSaleAttribution, persistAttribution } from "./resolve-attribution";
 
 export type Gateway = "assiny" | "hotmart";
 export type PurchaseStatus = "paid" | "refunded" | "chargeback" | "pending";
@@ -399,6 +400,20 @@ export async function recordPurchase(
     } catch (err) {
       console.error("[recordPurchase] markLostResolved failed:", err);
     }
+  }
+
+  // Atribuição UTM → ad/campaign Meta (fire-and-forget — não bloqueia o handler).
+  // Só roda em purchase_paid (vendas novas + renovações com cobrança nova).
+  if (p.eventKind === "purchase_paid" || p.eventKind === "subscription_renewed") {
+    resolveSaleAttribution(hub, {
+      utm_source: p.utm?.source ?? null,
+      utm_medium: p.utm?.medium ?? null,
+      utm_campaign: p.utm?.campaign ?? null,
+      utm_content: p.utm?.content ?? null,
+      utm_term: p.utm?.term ?? null,
+    })
+      .then((result) => persistAttribution(hub, purchaseId, result))
+      .catch((err) => console.error("[recordPurchase] attribution failed:", err));
   }
 
   return { skipped: false, customerId, purchaseId };
