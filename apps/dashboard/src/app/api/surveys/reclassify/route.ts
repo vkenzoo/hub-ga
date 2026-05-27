@@ -23,6 +23,48 @@ export async function POST() {
 
   const hub = createSupabaseAdmin();
 
+  // 0. Re-linka customer_id em survey_responses que ficaram sem match.
+  // Comum quando a venda chegou DEPOIS da resposta (ou foi reprocessada).
+  let relinkedByEmail = 0;
+  let relinkedByPhone = 0;
+  const { data: unlinkedResp } = await hub
+    .from("survey_responses")
+    .select("id, email, phone")
+    .is("customer_id", null)
+    .limit(5000);
+
+  for (const r of (unlinkedResp ?? []) as Array<{ id: string; email: string | null; phone: string | null }>) {
+    let customerId: string | null = null;
+    if (r.email) {
+      const { data } = await hub
+        .from("customers")
+        .select("id")
+        .ilike("email", r.email)
+        .maybeSingle();
+      if (data) {
+        customerId = data.id as string;
+        relinkedByEmail++;
+      }
+    }
+    if (!customerId && r.phone) {
+      const digits = r.phone.replace(/\D/g, "").slice(-11);
+      if (digits.length >= 10) {
+        const { data } = await hub
+          .from("customers")
+          .select("id")
+          .eq("phone_normalized", digits)
+          .limit(1);
+        if (data && data.length > 0) {
+          customerId = data[0]!.id as string;
+          relinkedByPhone++;
+        }
+      }
+    }
+    if (customerId) {
+      await hub.from("survey_responses").update({ customer_id: customerId }).eq("id", r.id);
+    }
+  }
+
   // 1. Carrega regras ativas
   const { data: rulesData, error: rulesErr } = await hub
     .from("lead_qualification_rules")
@@ -83,10 +125,22 @@ export async function POST() {
     actor: auth.email,
     action: "surveys.reclassify",
     target: "survey_responses",
-    payload: { rules_count: rules.length, processed, classified },
+    payload: {
+      rules_count: rules.length,
+      processed,
+      classified,
+      relinked_by_email: relinkedByEmail,
+      relinked_by_phone: relinkedByPhone,
+    },
   });
 
   revalidatePath("/surveys");
 
-  return NextResponse.json({ ok: true, processed, classified });
+  return NextResponse.json({
+    ok: true,
+    processed,
+    classified,
+    relinked_by_email: relinkedByEmail,
+    relinked_by_phone: relinkedByPhone,
+  });
 }

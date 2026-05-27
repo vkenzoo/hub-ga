@@ -16,8 +16,10 @@ export function ReclassifyButton() {
       if (!res.ok) {
         alert(`Erro: ${body.error ?? "unknown"} ${body.detail ?? ""}`);
       } else {
+        const relinked = (body.relinked_by_email ?? 0) + (body.relinked_by_phone ?? 0);
         alert(
-          `Reclassificado: ${body.processed ?? 0} processadas, ${body.classified ?? 0} casaram com alguma regra.`,
+          `Re-linkados: ${relinked} customer matches (${body.relinked_by_email ?? 0} por email, ${body.relinked_by_phone ?? 0} por phone)\n` +
+          `Reclassificados: ${body.processed ?? 0} processadas, ${body.classified ?? 0} casaram com regra.`,
         );
       }
       router.refresh();
