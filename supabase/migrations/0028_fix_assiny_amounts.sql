@@ -17,7 +17,7 @@ begin
        set amount = amount / 100.0
      where gateway = 'assiny';
 
-    insert into audit_log (actor, action, target, payload)
+    insert into audit_log (actor_email, action, target, payload)
     values (
       'system',
       'migration.0028_fix_assiny_amounts',
