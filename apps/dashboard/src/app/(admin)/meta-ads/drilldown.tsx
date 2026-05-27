@@ -128,10 +128,7 @@ function aggregateInsights(
     if (!daysByKey.has(key)) daysByKey.set(key, new Set());
     daysByKey.get(key)!.add(r.date_start);
 
-    if (level === "campaign") {
-      if (!adsByKey.has(key)) adsByKey.set(key, new Set());
-      adsByKey.get(key)!.add(r.ad_id);
-    } else if (level === "adset") {
+    if (level === "campaign" || level === "adset") {
       if (!adsByKey.has(key)) adsByKey.set(key, new Set());
       adsByKey.get(key)!.add(r.ad_id);
     }
@@ -157,30 +154,35 @@ export function DrillDown({
   cols,
   preservedQuery,
 }: Props) {
+  const [activeTab, setActiveTab] = useState<Level>("campaign");
   const [selectedCampaigns, setSelectedCampaigns] = useState<Set<string>>(new Set());
   const [selectedAdsets, setSelectedAdsets] = useState<Set<string>>(new Set());
 
-  // Campanhas — sempre todas, ignora seleção (seleção controla próximo nível)
+  // Campanhas — sempre todas
   const campaignAggs = useMemo(
     () => aggregateInsights(insights, "campaign", revByCampaign, accountNameById),
     [insights, revByCampaign, accountNameById],
   );
 
-  // Adsets — filtra pelas campanhas selecionadas (ou nada se vazio)
+  // Adsets — filtra por campanhas selecionadas (vazio = mostra tudo, padrão Meta)
   const adsetAggs = useMemo(() => {
-    if (selectedCampaigns.size === 0) return [];
-    const filtered = insights.filter((r) => selectedCampaigns.has(r.campaign_id));
+    const filtered =
+      selectedCampaigns.size > 0
+        ? insights.filter((r) => selectedCampaigns.has(r.campaign_id))
+        : insights;
     return aggregateInsights(filtered, "adset", revByAdset, accountNameById);
   }, [insights, selectedCampaigns, revByAdset, accountNameById]);
 
-  // Ads — filtra pelos adsets selecionados (ou nada se vazio)
+  // Ads — filtra por adsets (prioridade) OU campanhas selecionadas
   const adAggs = useMemo(() => {
-    if (selectedAdsets.size === 0) return [];
-    const filtered = insights.filter(
-      (r) => r.adset_id && selectedAdsets.has(r.adset_id),
-    );
+    let filtered = insights;
+    if (selectedAdsets.size > 0) {
+      filtered = filtered.filter((r) => r.adset_id && selectedAdsets.has(r.adset_id));
+    } else if (selectedCampaigns.size > 0) {
+      filtered = filtered.filter((r) => selectedCampaigns.has(r.campaign_id));
+    }
     return aggregateInsights(filtered, "ad", revByAd, accountNameById);
-  }, [insights, selectedAdsets, revByAd, accountNameById]);
+  }, [insights, selectedCampaigns, selectedAdsets, revByAd, accountNameById]);
 
   function toggleCampaign(id: string) {
     setSelectedCampaigns((prev) => {
@@ -189,8 +191,7 @@ export function DrillDown({
       else next.add(id);
       return next;
     });
-    // Limpa adsets selecionados quando muda seleção de campanhas (campanha
-    // removida da seleção pode invalidar adsets selecionados dela)
+    // Limpa adsets — campanhas mudaram, adsets selecionados podem ser inválidos
     setSelectedAdsets(new Set());
   }
 
@@ -203,35 +204,71 @@ export function DrillDown({
     });
   }
 
+  function clearCampaigns() {
+    setSelectedCampaigns(new Set());
+    setSelectedAdsets(new Set());
+  }
+  function clearAdsets() {
+    setSelectedAdsets(new Set());
+  }
+
+  // Labels dinâmicos das tabs (espelha padrão Meta Ads Manager)
+  const adsetsTabLabel =
+    selectedCampaigns.size > 0
+      ? `Adsets de ${selectedCampaigns.size} ${selectedCampaigns.size === 1 ? "campanha" : "campanhas"}`
+      : "Adsets";
+  const adsTabLabel =
+    selectedAdsets.size > 0
+      ? `Ads de ${selectedAdsets.size} ${selectedAdsets.size === 1 ? "adset" : "adsets"}`
+      : selectedCampaigns.size > 0
+        ? `Ads de ${selectedCampaigns.size} ${selectedCampaigns.size === 1 ? "campanha" : "campanhas"}`
+        : "Ads";
+
   return (
-    <div className="space-y-4">
-      {/* Header com cols toggle */}
-      <div className="flex items-center justify-end">
+    <div className="space-y-3">
+      {/* Tabs + Cols toggle */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex gap-1.5 flex-wrap">
+          <TabButton
+            active={activeTab === "campaign"}
+            onClick={() => setActiveTab("campaign")}
+            icon={<IconFolder />}
+            label="Campanhas"
+            selectedCount={selectedCampaigns.size}
+            onClear={selectedCampaigns.size > 0 ? clearCampaigns : undefined}
+          />
+          <TabButton
+            active={activeTab === "adset"}
+            onClick={() => setActiveTab("adset")}
+            icon={<IconGrid />}
+            label={adsetsTabLabel}
+            selectedCount={selectedAdsets.size}
+            onClear={selectedAdsets.size > 0 ? clearAdsets : undefined}
+          />
+          <TabButton
+            active={activeTab === "ad"}
+            onClick={() => setActiveTab("ad")}
+            icon={<IconTarget />}
+            label={adsTabLabel}
+          />
+        </div>
         <ColumnsToggle current={cols} preservedQuery={preservedQuery} />
       </div>
 
-      {/* Section 1: Campanhas */}
-      <Section
-        title="Campanhas"
-        count={campaignAggs.length}
-        hint={selectedCampaigns.size > 0 ? `${selectedCampaigns.size} selecionada${selectedCampaigns.size === 1 ? "" : "s"}` : "Marque pra ver os adsets"}
-      >
-        <Table
-          rows={campaignAggs}
-          cols={cols}
-          level="campaign"
-          selectedIds={selectedCampaigns}
-          onToggle={toggleCampaign}
-        />
-      </Section>
-
-      {/* Section 2: Adsets */}
-      {selectedCampaigns.size > 0 && (
-        <Section
-          title="Adsets"
-          count={adsetAggs.length}
-          hint={selectedAdsets.size > 0 ? `${selectedAdsets.size} selecionado${selectedAdsets.size === 1 ? "" : "s"}` : "Marque pra ver os ads"}
-        >
+      {/* Conteúdo da tab ativa */}
+      {activeTab === "campaign" && (
+        <Section count={campaignAggs.length} unit="campanha">
+          <Table
+            rows={campaignAggs}
+            cols={cols}
+            level="campaign"
+            selectedIds={selectedCampaigns}
+            onToggle={toggleCampaign}
+          />
+        </Section>
+      )}
+      {activeTab === "adset" && (
+        <Section count={adsetAggs.length} unit="adset">
           <Table
             rows={adsetAggs}
             cols={cols}
@@ -241,10 +278,8 @@ export function DrillDown({
           />
         </Section>
       )}
-
-      {/* Section 3: Ads */}
-      {selectedAdsets.size > 0 && (
-        <Section title="Ads" count={adAggs.length}>
+      {activeTab === "ad" && (
+        <Section count={adAggs.length} unit="ad">
           <Table rows={adAggs} cols={cols} level="ad" />
         </Section>
       )}
@@ -252,34 +287,104 @@ export function DrillDown({
   );
 }
 
-// ── Subcomponentes ──────────────────────────────────────────
+// ── Tab Button ──────────────────────────────────────────────
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+  selectedCount,
+  onClear,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  selectedCount?: number;
+  onClear?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm transition border ${
+        active
+          ? "bg-brand/15 border-brand text-text"
+          : "border-line text-text2 hover:border-line2 hover:text-text"
+      }`}
+    >
+      <span className={active ? "text-brand" : "text-muted"}>{icon}</span>
+      <span>{label}</span>
+      {selectedCount !== undefined && selectedCount > 0 && (
+        <span className="inline-flex items-center gap-1 bg-brand/20 text-brand text-2xs px-1.5 py-0.5 rounded">
+          {selectedCount} selecionado{selectedCount === 1 ? "" : "s"}
+          {onClear && (
+            <span
+              role="button"
+              aria-label="Limpar seleção"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClear();
+              }}
+              className="ml-0.5 hover:text-text cursor-pointer"
+            >
+              ×
+            </span>
+          )}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function IconFolder() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+function IconGrid() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="7" height="7" x="3" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="3" rx="1" />
+      <rect width="7" height="7" x="3" y="14" rx="1" />
+      <rect width="7" height="7" x="14" y="14" rx="1" />
+    </svg>
+  );
+}
+function IconTarget() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
+// ── Section wrapper ─────────────────────────────────────────
 function Section({
-  title,
   count,
-  hint,
+  unit,
   children,
 }: {
-  title: string;
   count: number;
-  hint?: string;
+  unit: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="card overflow-hidden">
-      <header className="px-4 py-2.5 border-b border-line flex items-baseline justify-between">
-        <div className="flex items-baseline gap-2">
-          <h2 className="text-sm font-medium">{title}</h2>
-          <span className="text-2xs text-muted">
-            {count} {count === 1 ? "linha" : "linhas"}
-          </span>
-        </div>
-        {hint && <span className="text-2xs text-muted">{hint}</span>}
+      <header className="px-4 py-2 border-b border-line text-2xs text-muted uppercase tracking-wider">
+        {count} {count === 1 ? unit : unit + "s"}
       </header>
       {children}
     </section>
   );
 }
 
+// ── Table ───────────────────────────────────────────────────
 function Table({
   rows,
   cols,
@@ -300,7 +405,7 @@ function Table({
       <table className="w-full text-sm">
         <thead className="text-left text-text2 border-b border-line">
           <tr>
-            {selectable && <th className="px-2 py-2 w-8" />}
+            {selectable && <th className="px-2 py-2.5 w-8" />}
             <th className="px-3 py-2.5 font-normal">
               {level === "campaign" ? "Campanha" : level === "adset" ? "Adset" : "Ad"}
             </th>
@@ -349,8 +454,8 @@ function Table({
             return (
               <tr
                 key={id}
-                className={`border-b border-line/40 transition cursor-${
-                  selectable ? "pointer" : "default"
+                className={`border-b border-line/40 transition ${
+                  selectable ? "cursor-pointer" : ""
                 } ${isSelected ? "bg-brand/5" : "hover:bg-surface2/30"}`}
                 onClick={selectable ? () => onToggle!(id) : undefined}
               >
@@ -407,6 +512,7 @@ function Table({
   );
 }
 
+// ── ColumnsToggle ───────────────────────────────────────────
 function ColumnsToggle({
   current,
   preservedQuery,
