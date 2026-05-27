@@ -6,5 +6,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+  // Exclui `api/cron/*` porque essas rotas autenticam via CRON_SECRET (não via
+  // sessão Supabase). Se passar pelo middleware, redireciona pra /login (307).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/cron|.*\\..*).*)"],
 };
