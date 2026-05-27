@@ -119,14 +119,26 @@ export type AssinyEvent = z.infer<typeof assinyEventSchema>;
 
 /**
  * Extrai ID único do evento pra dedupe.
+ *
+ * BUG RESOLVIDO: Assiny manda transaction em `data.transaction.id` (payload novo),
+ * mas o código antigo só lia `e.transaction?.id` (top-level). Quando vinha vazio,
+ * caía no fallback `email_offer_event`, e MÚLTIPLAS vendas da mesma oferta sem
+ * email top-level (também ausente no payload novo) ficavam com MESMO id →
+ * todas exceto a primeira eram dedup'das como duplicate.
+ *
+ * Fix: lê data.transaction.id PRIMEIRO (novo), fallback pro top-level (legado).
+ * Mesma coisa pra client.email e offer.id.
  */
 export function extractGatewayEventId(e: AssinyEvent): string {
-  const txId = e.transaction?.id;
+  const txId = e.data.transaction?.id ?? e.transaction?.id;
   const subId = e.data.subscription?.id;
   const cycle = e.data.subscription?.cycle;
+  const email = e.data.client?.email ?? e.client?.email;
+  const offerId = e.data.offer?.id;
+
   if (e.event.includes("renew") || (cycle && cycle > 1)) {
     return `${subId}_${cycle ?? 0}_${e.event}`;
   }
   if (txId) return `${txId}_${e.event}`;
-  return `${e.client?.email ?? "?"}_${e.data.offer?.id ?? "?"}_${e.event}`;
+  return `${email ?? "?"}_${offerId ?? "?"}_${e.event}`;
 }
