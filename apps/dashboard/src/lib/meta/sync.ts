@@ -43,6 +43,27 @@ interface InsightRow {
   impressions?: string;
   clicks?: string;
   reach?: string;
+  actions?: Array<{ action_type: string; value: string }>;
+}
+
+/**
+ * Lê o valor da PRIMEIRA action_type que casa, na ordem fornecida.
+ * Antipattern: nunca somar — types se sobrepõem (omni_X + X + offsite_conversion.fb_pixel_X
+ * costumam medir a mesma conversão por canais diferentes).
+ */
+function pickAction(
+  actions: InsightRow["actions"] | undefined,
+  types: string[],
+): number {
+  if (!actions) return 0;
+  for (const t of types) {
+    const found = actions.find((a) => a.action_type === t);
+    if (found) {
+      const n = parseInt(found.value, 10);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return 0;
 }
 
 interface InsightsResp {
@@ -98,7 +119,7 @@ async function fetchInsightsForAccount(opts: FetchInsightsOpts): Promise<Insight
   let params: Record<string, string> = {
     level: "ad",
     fields:
-      "spend,impressions,clicks,reach,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name",
+      "spend,impressions,clicks,reach,actions,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name",
     time_increment: "1",
     time_range: JSON.stringify({ since, until }),
     limit: "500",
@@ -211,6 +232,12 @@ export async function syncMetaConnection(
           impressions: toInt(i.impressions),
           clicks: toInt(i.clicks),
           reach: i.reach ? toInt(i.reach) : null,
+          landing_page_views: pickAction(i.actions, ["landing_page_view"]),
+          initiated_checkouts: pickAction(i.actions, [
+            "initiate_checkout",
+            "offsite_conversion.fb_pixel_initiate_checkout",
+            "omni_initiated_checkout",
+          ]),
           classification: classifyCampaign(i.campaign_name ?? null, rules),
           last_synced_at: new Date().toISOString(),
         }));
