@@ -27,33 +27,79 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Extrai o ID numérico de um campo UTM no formato "name|id" ou só "id".
- * Retorna null se não conseguir extrair número.
+ * Extrai o ID numérico de um campo UTM. Aceita 4 formatos comuns:
  *
- * Exemplos:
- *   "Anuncio X|120211000123"  → "120211000123"
- *   "120211000123"            → "120211000123"
- *   "Anuncio X"               → null
- *   undefined                 → null
+ *   1. "name|id"                → id após o último |       (template canônico)
+ *   2. "id::extra::"            → id antes do primeiro ::  (Meta auto-injection)
+ *   3. "name-id"                → id após o último -       (template Assiny/Meta)
+ *   4. "id" (puro)              → o próprio valor
+ *
+ * IDs do Meta são tipicamente ≥ 10 dígitos (usamos 10+ pra evitar match
+ * acidental em hífens dentro de nomes como "Opção 1-CTA").
+ *
+ * Exemplos reais:
+ *   "Anuncio X|120211000123"                       → "120211000123"
+ *   "120250826235040054::PAZXh0...::"              → "120250826235040054"
+ *   "[Validação] - Opção 01-120250825915890054"    → "120250825915890054"
+ *   "ANÚNCIO 03-120250826235010054"                → "120250826235010054"
+ *   "120211000123"                                 → "120211000123"
+ *   "Instagram_Feed"                               → null
  */
 function extractId(field: string | null | undefined): string | null {
   if (!field) return null;
   const v = field.trim();
-  // Pega tudo após o último | (caso name contenha pipes — improvável mas seguro)
+
+  // 1. Pipe (nosso template ideal): "name|id"
   const lastPipe = v.lastIndexOf("|");
-  const candidate = lastPipe >= 0 ? v.slice(lastPipe + 1).trim() : v;
-  return /^\d+$/.test(candidate) ? candidate : null;
+  if (lastPipe >= 0) {
+    const after = v.slice(lastPipe + 1).trim();
+    if (/^\d+$/.test(after)) return after;
+  }
+
+  // 2. Double-colon (Meta às vezes auto-injeta): "id::fbtoken::"
+  const firstDoubleColon = v.indexOf("::");
+  if (firstDoubleColon > 0) {
+    const before = v.slice(0, firstDoubleColon).trim();
+    if (/^\d+$/.test(before)) return before;
+  }
+
+  // 3. Dash (Assiny/Meta de novo): "name-id" (id tem 10+ dígitos pra evitar
+  // falso-positivo em nomes tipo "Opção 01-A" ou "CTA-2")
+  const lastDash = v.lastIndexOf("-");
+  if (lastDash >= 0) {
+    const after = v.slice(lastDash + 1).trim();
+    if (/^\d{10,}$/.test(after)) return after;
+  }
+
+  // 4. Plain id
+  if (/^\d+$/.test(v)) return v;
+
+  return null;
 }
 
 /**
- * Extrai o nome de um campo UTM no formato "name|id".
- * Se for só "id" puro (sem pipe), retorna o valor inteiro.
+ * Extrai o nome de um campo UTM removendo o ID e separador.
+ * Se não houver separador, retorna o valor inteiro.
  */
 function extractName(field: string | null | undefined): string | null {
   if (!field) return null;
   const v = field.trim();
+  // Mesma ordem do extractId pra consistência
   const lastPipe = v.lastIndexOf("|");
-  return lastPipe >= 0 ? v.slice(0, lastPipe).trim() : v;
+  if (lastPipe >= 0 && /^\d+$/.test(v.slice(lastPipe + 1).trim())) {
+    return v.slice(0, lastPipe).trim();
+  }
+  const firstDoubleColon = v.indexOf("::");
+  if (firstDoubleColon > 0 && /^\d+$/.test(v.slice(0, firstDoubleColon).trim())) {
+    // No "::" format, o id vem ANTES — então o "nome" seria depois, mas isso
+    // não faz sentido. Retornamos só o id parte.
+    return v.slice(firstDoubleColon + 2).trim() || null;
+  }
+  const lastDash = v.lastIndexOf("-");
+  if (lastDash >= 0 && /^\d{10,}$/.test(v.slice(lastDash + 1).trim())) {
+    return v.slice(0, lastDash).trim();
+  }
+  return v;
 }
 
 interface UtmFields {
