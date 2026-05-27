@@ -190,17 +190,10 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
     term: m.utm_term ?? urlParams.utm_term,
   };
 
-  // Affiliate — 1ª commission user_id
-  const aff = tx?.commissions?.[0];
-  let affiliateId: string | undefined;
-  if (aff?.user) {
-    if (typeof aff.user === "string" || typeof aff.user === "number") {
-      affiliateId = String(aff.user);
-    } else if (typeof aff.user === "object" && "id" in aff.user) {
-      affiliateId = String((aff.user as { id: unknown }).id);
-    }
-  }
-  if (!affiliateId && aff?.email) affiliateId = aff.email;
+  // Affiliate: na Assiny, commissions[0] é o PRODUTOR (você), não afiliado.
+  // Sem um campo dedicado pra distinguir afiliado real, deixamos null sempre.
+  // A coluna "Origem" no /customers/[id] cai no fallback de utm_source.
+  const affiliateId: string | undefined = undefined;
 
   // Funil: a Assiny envia metadata.short_funnel_id (ex: "hncFVu") e metadata.funnel_id (uuid).
   // O short_funnel_id é o que aparece na URL do admin (/node/hncFVu), mais reconhecível.
