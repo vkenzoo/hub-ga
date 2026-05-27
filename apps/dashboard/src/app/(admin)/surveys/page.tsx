@@ -4,6 +4,7 @@ import { requireAdmin, canAccessSection } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, StatCard } from "@/components/page";
 import { Hideable } from "@/components/hideable";
+import { ReclassifyButton } from "./reclassify-button";
 
 interface SurveyRow {
   id: string;
@@ -112,6 +113,7 @@ export default async function Page({
         subtitle="Respostas do Respondi.app com qualificação automática de leads."
         right={
           <div className="flex items-center gap-2">
+            <ReclassifyButton />
             <Link href="/surveys/rules" className="btn btn-sm">
               Regras
             </Link>

@@ -69,9 +69,31 @@ export function extractPhone(
   return null;
 }
 
+/** Normaliza pra comparação: trim + lowercase + colapsa espaços + remove '?' final */
+function normalize(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\?+$/, "");
+}
+
+/** Acha o valor da resposta pela question_key, comparando normalizado. */
+function findAnswer(
+  answers: Record<string, unknown>,
+  questionKey: string,
+): string | null {
+  const target = normalize(questionKey);
+  for (const [key, value] of Object.entries(answers)) {
+    if (typeof value !== "string") continue;
+    if (normalize(key) === target) return value;
+  }
+  return null;
+}
+
 /**
  * Aplica regras de qualificação na ordem recebida. Vence a primeira que casar.
- * answers: chave/valor da pergunta. Match por chave (question_key) primeiro.
+ * Match tolerante: trim + lowercase + colapsa whitespace + ignora "?" final.
  */
 export function classifyResponse(
   answers: Record<string, unknown>,
@@ -82,11 +104,11 @@ export function classifyResponse(
     if (!rule.active) continue;
     if (rule.form_id && rule.form_id !== formId) continue;
 
-    const answerVal = answers[rule.question_key];
-    if (typeof answerVal !== "string") continue;
+    const answerVal = findAnswer(answers, rule.question_key);
+    if (!answerVal) continue;
 
-    const a = answerVal.toLowerCase();
-    const p = rule.answer_pattern.toLowerCase();
+    const a = normalize(answerVal);
+    const p = normalize(rule.answer_pattern);
 
     let match = false;
     if (rule.match_type === "contains") match = a.includes(p);
