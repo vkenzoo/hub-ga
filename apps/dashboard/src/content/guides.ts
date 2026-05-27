@@ -1102,6 +1102,102 @@ Múltiplas regras podem rodar — vence a primeira que casa (por ordem de criaç
 `,
   },
 
+  {
+    slug: "template-utm-meta-ads",
+    title: "Template UTM padrão pra Meta Ads",
+    category: "integracoes",
+    summary: "Como configurar Parâmetros de URL no Meta pra atribuição automática funcionar.",
+    updatedAt: "2026-05-27",
+    featured: true,
+    content: `# Template UTM padrão pra Meta Ads
+
+Pra **atribuir vendas a campanhas/adsets/ads automaticamente** em /meta-ads, cada anúncio precisa ter UTMs configurados com **IDs do Meta** (não só nomes).
+
+## Template recomendado
+
+Cola **exatamente isso** em Ads Manager → escolhe o ad → **Editar** → **Opções de URL → Parâmetros de URL**:
+
+\`\`\`
+utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}
+\`\`\`
+
+> ⚠️ As chaves duplas \`{{ }}\` são **placeholders** que o Meta substitui em runtime. Não digite os IDs reais — deixa o Meta resolver.
+
+## Por que esse formato
+
+Formato \`name|id\` (nome + pipe + id) tem 2 vantagens:
+
+1. **Match exato** no hub: o resolver extrai o id depois do \`|\` e usa pra encontrar a campanha
+2. **Nome legível** em outras ferramentas (Google Analytics, planilhas, etc.)
+
+## O que cada placeholder vira
+
+| Placeholder | Substitui por | Exemplo |
+|---|---|---|
+| \`{{campaign.id}}\` | ID numérico da campanha | \`120211000123456789\` |
+| \`{{campaign.name}}\` | Nome da campanha | \`[F01] Aquisição Geração A\` |
+| \`{{adset.id}}\` | ID do conjunto | \`120211000234567890\` |
+| \`{{adset.name}}\` | Nome do conjunto | \`Interesse 25-45\` |
+| \`{{ad.id}}\` | ID do anúncio | \`120211000345678901\` |
+| \`{{ad.name}}\` | Nome do anúncio | \`Headline A - vídeo\` |
+| \`{{placement}}\` | Onde apareceu | \`facebook_reels\`, \`instagram_stories\`, \`facebook_feed\` |
+
+URL final no clique:
+
+\`\`\`
+https://pay.assiny.com.br/funil-x?
+  utm_source=FB
+  &utm_campaign=[F01]%20Aquisi%C3%A7%C3%A3o%20Gera%C3%A7%C3%A3o%20A|120211000123456789
+  &utm_medium=Interesse%2025-45|120211000234567890
+  &utm_content=Headline%20A%20-%20v%C3%ADdeo|120211000345678901
+  &utm_term=facebook_reels
+\`\`\`
+
+## Como o resolver usa (5 níveis)
+
+| Nível | Match | Confiança |
+|---|---|---|
+| **1** | utm_content(id) + utm_medium(id) + utm_campaign(id) batem em (ad, adset, campaign) | **1.00** |
+| 2 | só utm_content(id) bate em ad_id | 0.95 |
+| 3 | utm_medium(id) + utm_campaign(id) batem em (adset, campaign) | 0.90 |
+| 4 | utm_campaign(id) bate em campaign_id | 0.70 |
+| 5 | utm_campaign(name) ilike campaign_name (fuzzy) | 0.40 |
+
+Quanto mais alto o nível, mais confiável o ROAS atribuído.
+
+## Aplicar em massa
+
+No Meta Ads Manager dá pra editar vários ads de uma vez:
+
+1. Vai em **Anúncios** (tab)
+2. Filtra todos os ativos
+3. Seleciona todos
+4. Click **Editar** (lápis)
+5. Em **Parâmetros de URL**, cola o template
+6. **Aplicar a todos os selecionados**
+7. Publicar
+
+Próximas vendas vão começar a atribuir corretamente em /meta-ads.
+
+## Verificar que tá funcionando
+
+Roda no Supabase:
+
+\`\`\`sql
+select
+  match_method,
+  match_confidence,
+  count(*) as total
+from utm_sales_attribution
+where matched = true
+group by 1, 2
+order by 2 desc;
+\`\`\`
+
+Se a maioria das vendas tá no nível **1.00** ou **0.95** = template tá aplicado. Se tá no **0.40** ou **0.70** = só algumas campanhas têm o template, completar nas outras.
+`,
+  },
+
   // ─────────────────────────── EMAILS ───────────────────────────
   {
     slug: "email-boas-vindas",

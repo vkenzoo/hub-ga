@@ -20,7 +20,9 @@ interface DailyPoint {
   date: string;          // ISO date "2026-05-19"
   receita: number;
   reembolsos: number;
+  investimento: number;
   margem: number;
+  roas: number | null;
 }
 
 interface PaymentDailyPoint {
@@ -47,6 +49,8 @@ const COLORS = {
   receita: "#ec2d7c",
   reembolsos: "#ef4444",
   margem: "#22c55e",
+  investimento: "#fbbf24",   // amarelo — gasto Meta
+  roas: "#3b82f6",            // azul — multiplicador
   pix: "#22c55e",
   cartao: "#3b82f6",
   boleto: "#fbbf24",
@@ -65,22 +69,28 @@ function TooltipBox({ active, payload, label }: {
   return (
     <div className="bg-surface border border-line rounded-md p-2 shadow-lg text-xs">
       <div className="text-text2 mb-1">{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} className="flex items-center gap-2 tabular-nums">
-          <span className="dot" style={{ background: p.color }} />
-          <span className="text-text2">{p.name}:</span>
-          <span className="text-text">R$ {Number(p.value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-        </div>
-      ))}
+      {payload.map((p, i) => {
+        const isRoas = p.dataKey === "roas";
+        const valueText = isRoas
+          ? Number(p.value).toFixed(2).replace(".", ",")
+          : `R$ ${Number(p.value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        return (
+          <div key={i} className="flex items-center gap-2 tabular-nums">
+            <span className="dot" style={{ background: p.color }} />
+            <span className="text-text2">{p.name}:</span>
+            <span className="text-text">{valueText}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 export function RevenueChart({ data }: { data: DailyPoint[] }) {
   return (
-    <div className="w-full h-72">
+    <div className="w-full h-80">
       <ResponsiveContainer>
-        <ComposedChart data={data} margin={{ top: 10, right: 8, bottom: 0, left: -10 }}>
+        <ComposedChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
           <CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="date"
@@ -88,10 +98,21 @@ export function RevenueChart({ data }: { data: DailyPoint[] }) {
             stroke={COLORS.axis}
             tick={{ fontSize: 11, fill: COLORS.text }}
           />
+          {/* Eixo esquerdo — R$ (receita/reembolsos/margem/investimento) */}
           <YAxis
+            yAxisId="money"
             stroke={COLORS.axis}
             tick={{ fontSize: 11, fill: COLORS.text }}
             tickFormatter={fmtMoney}
+          />
+          {/* Eixo direito — ROAS (multiplicador, sem unidade) */}
+          <YAxis
+            yAxisId="roas"
+            orientation="right"
+            stroke={COLORS.roas}
+            tick={{ fontSize: 11, fill: COLORS.roas }}
+            tickFormatter={(v) => v.toFixed(1).replace(".", ",")}
+            domain={[0, "dataMax + 1"]}
           />
           <Tooltip
             content={<TooltipBox />}
@@ -103,15 +124,28 @@ export function RevenueChart({ data }: { data: DailyPoint[] }) {
             iconType="circle"
             iconSize={8}
           />
-          <Bar dataKey="receita" name="Faturamento" fill={COLORS.receita} radius={[2, 2, 0, 0]} />
-          <Bar dataKey="reembolsos" name="Reembolsos" fill={COLORS.reembolsos} radius={[2, 2, 0, 0]} />
+          <Bar yAxisId="money" dataKey="receita" name="Faturamento" fill={COLORS.receita} radius={[2, 2, 0, 0]} />
+          <Bar yAxisId="money" dataKey="investimento" name="Investimento" fill={COLORS.investimento} radius={[2, 2, 0, 0]} />
+          <Bar yAxisId="money" dataKey="reembolsos" name="Reembolsos" fill={COLORS.reembolsos} radius={[2, 2, 0, 0]} />
           <Line
+            yAxisId="money"
             type="monotone"
             dataKey="margem"
             name="Margem de contribuição"
             stroke={COLORS.margem}
             strokeWidth={2}
             dot={{ r: 3, fill: COLORS.margem }}
+          />
+          <Line
+            yAxisId="roas"
+            type="monotone"
+            dataKey="roas"
+            name="ROAS"
+            stroke={COLORS.roas}
+            strokeWidth={2}
+            strokeDasharray="4 4"
+            dot={{ r: 3, fill: COLORS.roas }}
+            connectNulls
           />
         </ComposedChart>
       </ResponsiveContainer>

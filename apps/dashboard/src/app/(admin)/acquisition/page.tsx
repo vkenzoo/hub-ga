@@ -189,14 +189,15 @@ export default async function Page({
 
   const dailyMap = new Map<
     string,
-    { receita: number; reembolsos: number; pix: number; cartao: number; boleto: number; outros: number }
+    { receita: number; reembolsos: number; investimento: number; pix: number; cartao: number; boleto: number; outros: number }
   >();
+  const emptyDay = () => ({ receita: 0, reembolsos: 0, investimento: 0, pix: 0, cartao: 0, boleto: 0, outros: 0 });
   for (const day of daysBetween(firstDay, lastDay)) {
-    dailyMap.set(day, { receita: 0, reembolsos: 0, pix: 0, cartao: 0, boleto: 0, outros: 0 });
+    dailyMap.set(day, emptyDay());
   }
   for (const p of paid) {
     const day = isoDayBRT(p.created_at);
-    const row = dailyMap.get(day) ?? { receita: 0, reembolsos: 0, pix: 0, cartao: 0, boleto: 0, outros: 0 };
+    const row = dailyMap.get(day) ?? emptyDay();
     row.receita += Number(p.amount);
     const kind = classifyPayment(p.payment_method);
     row[kind] += Number(p.amount);
@@ -204,16 +205,30 @@ export default async function Page({
   }
   for (const p of refunded) {
     const day = isoDayBRT(p.created_at);
-    const row = dailyMap.get(day) ?? { receita: 0, reembolsos: 0, pix: 0, cartao: 0, boleto: 0, outros: 0 };
+    const row = dailyMap.get(day) ?? emptyDay();
     row.reembolsos += Number(p.amount);
     dailyMap.set(day, row);
   }
-  const revenueSeries = [...dailyMap.entries()].sort().map(([date, r]) => ({
-    date,
-    receita: r.receita,
-    reembolsos: r.reembolsos,
-    margem: r.receita - r.receita * GATEWAY_FEE_RATE - r.reembolsos,
-  }));
+  // Investimento Meta (acquisition) por dia — date_start é DATE (YYYY-MM-DD direto)
+  for (const r of (metaRows ?? []) as Array<{ spend_cents: number; date_start: string }>) {
+    const day = r.date_start;
+    const row = dailyMap.get(day) ?? emptyDay();
+    row.investimento += Number(r.spend_cents ?? 0) / 100;
+    dailyMap.set(day, row);
+  }
+  const revenueSeries = [...dailyMap.entries()].sort().map(([date, r]) => {
+    const taxas = r.receita * GATEWAY_FEE_RATE;
+    const margem = r.receita - taxas - r.reembolsos - r.investimento;
+    const roas = r.investimento > 0 ? r.receita / r.investimento : null;
+    return {
+      date,
+      receita: r.receita,
+      reembolsos: r.reembolsos,
+      investimento: r.investimento,
+      margem,
+      roas,
+    };
+  });
   const paymentSeries = [...dailyMap.entries()].sort().map(([date, r]) => ({
     date,
     pix: r.pix,
