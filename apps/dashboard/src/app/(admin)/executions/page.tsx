@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader } from "@/components/page";
+import { ReplayDuplicatesButton } from "./replay-duplicates-button";
 
 interface ExecutionRow {
   id: string;
@@ -98,6 +99,7 @@ export default async function Page({
         subtitle="Auditoria de cada webhook recebido — payload, status, duração e cadeia de eventos."
         right={
           <div className="flex items-center gap-2">
+            <ReplayDuplicatesButton />
             <span className="chip"><span className="dot bg-accent" /> {ok} OK</span>
             {skipped > 0 && <span className="chip"><span className="dot bg-warn" /> {skipped} skip</span>}
             {failed > 0 && <span className="chip text-danger"><span className="dot bg-danger" /> {failed} erro</span>}

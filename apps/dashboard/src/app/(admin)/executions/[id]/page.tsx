@@ -8,11 +8,14 @@ import { logAudit } from "@/lib/audit";
 import { PageBody, PageHeader } from "@/components/page";
 
 // Quais status podem ser reprocessados (tipicamente os que não criaram purchase
-// e podem ter sido resolvidos por configuração posterior)
+// e podem ter sido resolvidos por configuração posterior).
+// 'duplicate' incluído pra casos em que o dedup foi falso-positivo
+// (bug histórico de extração de gateway_event_id).
 const REPLAYABLE_STATUSES = new Set([
   "unknown_product",
   "missing_data",
   "failed",
+  "duplicate",
 ]);
 
 async function replayExecution(formData: FormData) {
