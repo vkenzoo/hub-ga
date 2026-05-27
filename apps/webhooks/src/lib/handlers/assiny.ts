@@ -72,6 +72,14 @@ function clientName(c: NonNullable<AssinyEvent["client"]>): string | undefined {
   return c.first_name ?? c.last_name;
 }
 
+/**
+ * Assiny manda valores em CENTAVOS (transaction.amount=6700 → R$ 67,00).
+ * Convertemos pra reais ao retornar pra alinhar com purchases.amount
+ * (que armazena valor decimal em reais, igual Hotmart).
+ *
+ * Nota: lost_purchases.amount_cents continua em centavos (campo já é nomeado
+ * com sufixo _cents e é tratado como tal no display).
+ */
 function extractAmount(e: AssinyEvent): number {
   const raw =
     e.data.transaction?.amount ??
@@ -79,7 +87,8 @@ function extractAmount(e: AssinyEvent): number {
     e.data.offer?.amount ??
     0;
   const n = typeof raw === "string" ? Number(raw) : raw;
-  return Number.isFinite(n) ? Number(n) : 0;
+  if (!Number.isFinite(n)) return 0;
+  return Number(n) / 100;
 }
 
 // Conforme doc da Assiny, transaction/metadata/client ficam dentro de data.
