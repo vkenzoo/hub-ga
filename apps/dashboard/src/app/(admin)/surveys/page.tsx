@@ -87,13 +87,24 @@ export default async function Page({
   const uniqueByContact = new Set(
     rows.map((r) => r.email ?? r.phone ?? r.respondi_respondent_id),
   ).size;
-  const buyerRows = rows.filter((r) => r.customer_id);
-  const matchedCustomers = buyerRows.length;
+
+  // Dedup compradores por customer_id — múltiplas respostas do mesmo cliente
+  // contam como 1 resposta válida + 1 lead (a mais recente). rows já vem
+  // ordenado por received_at desc do query, então primeira por customer = mais nova.
+  const buyerByCustomer = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    if (!r.customer_id) continue;
+    if (!buyerByCustomer.has(r.customer_id)) {
+      buyerByCustomer.set(r.customer_id, r);
+    }
+  }
+  const uniqueBuyers = Array.from(buyerByCustomer.values());
+  const matchedCustomers = uniqueBuyers.length;
   const conversionRate = uniqueByContact > 0 ? (matchedCustomers / uniqueByContact) * 100 : 0;
 
-  // Distribuição A/B/C/D/E só conta compradores (quem está na base de clientes).
-  // Não-compradores ainda aparecem na tabela completa abaixo.
-  const byQual = buyerRows.reduce<Record<string, number>>((acc, r) => {
+  // Distribuição A/B/C/D/E — 1 lead por cliente (não por resposta).
+  // Usa qualification da resposta mais recente (já tá em uniqueBuyers).
+  const byQual = uniqueBuyers.reduce<Record<string, number>>((acc, r) => {
     const k = r.qualification ?? "_none";
     acc[k] = (acc[k] ?? 0) + 1;
     return acc;
