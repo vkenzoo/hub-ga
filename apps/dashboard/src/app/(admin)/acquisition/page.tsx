@@ -164,16 +164,20 @@ export default async function Page({
   );
   const spendMeta = investimentoCents / 100;
   const impostoMeta = spendMeta * META_TAX_RATE;
-  // Investimento "total" = spend Meta + imposto. Esse é o número que
-  // entra em ROAS/CPA e que deduz da margem.
+  // Investimento "total" = spend Meta + imposto. Esse é o número que aparece
+  // no card "Investimento" e que entra em CPA + ROI (não ROAS).
   const investimento = spendMeta + impostoMeta;
   const taxas = receita * GATEWAY_FEE_RATE;
+  const gastosTotais = spendMeta + impostoMeta + taxas;
   const margem = receita - taxas - reembolsos - investimento;
   const margemPct = receita > 0 ? (margem / receita) * 100 : 0;
   const taxaReembolso = receita > 0 ? (reembolsos / receita) * 100 : 0;
   const compradores = new Set(paid.map((p) => p.customer_id)).size;
   const tmf = compradores > 0 ? receita / compradores : 0;
-  const roas = investimento > 0 ? receita / investimento : null;
+  // ROAS pure = Receita ÷ Spend Meta (sem imposto/taxa) — métrica clássica de mídia
+  const roas = spendMeta > 0 ? receita / spendMeta : null;
+  // ROI = Receita ÷ Gastos totais (spend + imposto + gateway) — visão de negócio
+  const roi = gastosTotais > 0 ? receita / gastosTotais : null;
   const cpa = compradores > 0 && investimento > 0 ? investimento / compradores : null;
 
   // ── Timeseries diário ────────────────────────────────────
@@ -225,10 +229,11 @@ export default async function Page({
   }
   const revenueSeries = [...dailyMap.entries()].sort().map(([date, r]) => {
     const taxas = r.receita * GATEWAY_FEE_RATE;
-    // Investimento diário = spend Meta + imposto (consistente com o KPI total)
-    const investimentoTotal = r.investimento * (1 + META_TAX_RATE);
+    const spendDay = r.investimento;                 // só spend Meta puro
+    const investimentoTotal = spendDay * (1 + META_TAX_RATE); // spend + imposto
     const margem = r.receita - taxas - r.reembolsos - investimentoTotal;
-    const roas = investimentoTotal > 0 ? r.receita / investimentoTotal : null;
+    // ROAS no chart = Receita ÷ Spend (sem imposto/taxa), igual ao card.
+    const roas = spendDay > 0 ? r.receita / spendDay : null;
     return {
       date,
       receita: r.receita,
@@ -370,7 +375,7 @@ export default async function Page({
         </section>
 
         {/* KPIs secundários */}
-        <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <section className="grid grid-cols-2 lg:grid-cols-6 gap-3">
           <StatCard label="Ticket médio (TMF)" value={<Hideable kind="money">{fmtMoney(tmf)}</Hideable>} hint="Receita ÷ compradores" />
           <StatCard
             label="Investimento"
@@ -386,12 +391,17 @@ export default async function Page({
           <StatCard
             label={`Imposto Meta (${(META_TAX_RATE * 100).toFixed(1)}%)`}
             value={impostoMeta > 0 ? <Hideable kind="money">{fmtMoney(impostoMeta)}</Hideable> : "—"}
-            hint="Incluso no investimento e MC"
+            hint="Incluso no investimento"
           />
           <StatCard
             label="ROAS"
             value={roas != null ? <Hideable kind="count">{roas.toFixed(2).replace(".", ",")}</Hideable> : "—"}
-            hint="Receita ÷ investimento"
+            hint="Receita ÷ Spend Meta"
+          />
+          <StatCard
+            label="ROI"
+            value={roi != null ? <Hideable kind="count">{roi.toFixed(2).replace(".", ",")}</Hideable> : "—"}
+            hint="Receita ÷ (Spend + Imposto + Gateway)"
           />
           <StatCard
             label="CPA"
