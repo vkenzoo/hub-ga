@@ -134,6 +134,16 @@ export async function handleHotmartEvent(hub: SupabaseClient, event: HotmartEven
 
   const eventKind = kind as EventKind;
 
+  // Horário REAL da transação. Hotmart envia em purchase.order_date (epoch ms)
+  // ou approved_date. Importante pra replay não marcar com NOW().
+  const occurredEpoch =
+    (d.purchase as { approved_date?: number; order_date?: number }).approved_date ??
+    (d.purchase as { order_date?: number }).order_date;
+  const occurredAt =
+    occurredEpoch && Number.isFinite(occurredEpoch)
+      ? new Date(occurredEpoch).toISOString()
+      : undefined;
+
   const normalized: NormalizedPurchase = {
     gateway: "hotmart",
     eventKind,
@@ -142,6 +152,7 @@ export async function handleHotmartEvent(hub: SupabaseClient, event: HotmartEven
     gatewayProductId: d.product.id,
     productNameHint: d.product.name,
     paymentMethod: paymentObj?.type ?? paymentObj?.method ?? undefined,
+    occurredAt,
     // Hotmart não envia número do ciclo explícito — quando é renovação inferimos cycle>=2.
     subscriptionCycle: eventKind === "subscription_renewed" ? 2 : eventKind === "purchase_paid" ? 1 : undefined,
     customer: {

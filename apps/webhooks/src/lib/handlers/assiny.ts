@@ -203,6 +203,13 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
   // A essa altura kind só pode ser EventKind (não 'unknown' e não 'lost:*')
   const eventKind = kind as EventKind;
 
+  // Horário REAL da transação (do payload). Usado pra created_at — evita
+  // que replays marquem vendas antigas com timestamp do replay.
+  const txOccurredAt =
+    (tx as { created_at?: string; updated_at?: string } | undefined)?.created_at ??
+    (tx as { updated_at?: string } | undefined)?.updated_at ??
+    undefined;
+
   const normalized: NormalizedPurchase = {
     gateway: "assiny",
     eventKind,
@@ -211,6 +218,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
     gatewayProductId: productGwId,
     productNameHint: event.data.offer?.product?.name ?? event.data.offer?.name,
     paymentMethod: tx?.payment_type ?? undefined,
+    occurredAt: txOccurredAt,
     gatewayOfferId: event.data.offer?.id ?? undefined,
     gatewayOfferName: event.data.offer?.name ?? undefined,
     gatewayFunnelName: funnelRef?.trim() || undefined,
@@ -267,6 +275,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
         gatewayProductId: bump.product.id,
         productNameHint: bump.product.name ?? bump.name,
         paymentMethod: bump.payment_type ?? tx?.payment_type ?? undefined,
+        occurredAt: txOccurredAt, // mesmo horário do main (compra simultânea)
         gatewayOfferId: bump.id,
         gatewayOfferName: bump.name,
         gatewayFunnelName: funnelRef?.trim() || undefined,

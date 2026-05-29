@@ -58,6 +58,12 @@ export interface NormalizedPurchase {
     term?: string;
   };
   affiliateId?: string;
+  /**
+   * Timestamp original da transação (do payload do gateway). Quando ausente,
+   * usa NOW() (padrão). Importante pra replays — evita marcar venda antiga
+   * com horário do replay.
+   */
+  occurredAt?: string; // ISO timestamp
   subscription?: {
     gatewaySubscriptionId: string;
     currentPeriodEnd?: string | null;
@@ -300,28 +306,34 @@ export async function recordPurchase(
   );
   if (!customerId) return { skipped: true, reason: "customer_insert_failed" };
 
-  // 4. Insere purchase
+  // 4. Insere purchase. created_at = occurredAt do payload (se vier) ou NOW().
+  // Importante pra replays — sem isso, vendas antigas reprocessadas ficariam
+  // todas com timestamp do replay (não do horário real da transação).
+  const purchaseRow: Record<string, unknown> = {
+    customer_id: customerId,
+    product_id: product.id,
+    gateway: p.gateway,
+    gateway_event_id: p.gatewayEventId,
+    amount: p.amount,
+    status: p.status,
+    utm_source: p.utm?.source ?? null,
+    utm_medium: p.utm?.medium ?? null,
+    utm_campaign: p.utm?.campaign ?? null,
+    utm_content: p.utm?.content ?? null,
+    utm_term: p.utm?.term ?? null,
+    affiliate_id: p.affiliateId ?? null,
+    payment_method: p.paymentMethod ?? null,
+    gateway_offer_id: p.gatewayOfferId ?? null,
+    gateway_offer_name: p.gatewayOfferName ?? null,
+    gateway_funnel_name: p.gatewayFunnelName ?? null,
+    subscription_cycle: p.subscriptionCycle ?? null,
+  };
+  if (p.occurredAt) {
+    purchaseRow.created_at = p.occurredAt;
+  }
   const { data: purchase, error: purchaseErr } = await hub
     .from("purchases")
-    .insert({
-      customer_id: customerId,
-      product_id: product.id,
-      gateway: p.gateway,
-      gateway_event_id: p.gatewayEventId,
-      amount: p.amount,
-      status: p.status,
-      utm_source: p.utm?.source ?? null,
-      utm_medium: p.utm?.medium ?? null,
-      utm_campaign: p.utm?.campaign ?? null,
-      utm_content: p.utm?.content ?? null,
-      utm_term: p.utm?.term ?? null,
-      affiliate_id: p.affiliateId ?? null,
-      payment_method: p.paymentMethod ?? null,
-      gateway_offer_id: p.gatewayOfferId ?? null,
-      gateway_offer_name: p.gatewayOfferName ?? null,
-      gateway_funnel_name: p.gatewayFunnelName ?? null,
-      subscription_cycle: p.subscriptionCycle ?? null,
-    })
+    .insert(purchaseRow)
     .select("id")
     .single();
 
