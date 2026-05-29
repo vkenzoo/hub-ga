@@ -69,7 +69,19 @@ export default async function Page({
   if (sp.form && sp.form !== "all") query = query.eq("form_id", sp.form);
   if (sp.qual && sp.qual !== "all") query = query.eq("qualification", sp.qual);
 
-  const { data } = await query;
+  // Compradores do produto principal de aquisição (top 1 por receita all-time, role='acquisition').
+  // Usado pra calcular taxa de conversão da pesquisa: alunos que responderam ÷ total de alunos.
+  const acquisitionBuyersPromise = sb
+    .from("purchases")
+    .select("customer_id, amount, product_id, products!inner(id, name, role)")
+    .eq("products.role", "acquisition")
+    .eq("status", "paid")
+    .limit(100000);
+
+  const [{ data }, { data: acquisitionBuyersRows }] = await Promise.all([
+    query,
+    acquisitionBuyersPromise,
+  ]);
   let rows = (data ?? []) as unknown as SurveyRow[];
 
   if (sp.q) {
@@ -101,6 +113,41 @@ export default async function Page({
   const uniqueBuyers = Array.from(buyerByCustomer.values());
   const matchedCustomers = uniqueBuyers.length;
   const conversionRate = uniqueByContact > 0 ? (matchedCustomers / uniqueByContact) * 100 : 0;
+
+  // Taxa de conversão da pesquisa = respondentes do produto principal ÷ total de alunos do produto principal.
+  // Produto principal = maior receita all-time em role='acquisition'.
+  interface BuyerRow {
+    customer_id: string;
+    amount: number;
+    product_id: string | null;
+    products: { id: string; name: string; role: string } | null;
+  }
+  const acquisitionBuyers = (acquisitionBuyersRows ?? []) as unknown as BuyerRow[];
+  const revenueByProduct = new Map<string, { name: string; receita: number }>();
+  for (const b of acquisitionBuyers) {
+    const pid = b.product_id ?? "?";
+    const name = b.products?.name ?? "(removido)";
+    const row = revenueByProduct.get(pid) ?? { name, receita: 0 };
+    row.receita += Number(b.amount);
+    revenueByProduct.set(pid, row);
+  }
+  const [mainProductId = null, mainProductInfo = null] = [...revenueByProduct.entries()].sort(
+    (a, b) => b[1].receita - a[1].receita,
+  )[0] ?? [];
+  const mainProductBuyers = new Set(
+    mainProductId
+      ? acquisitionBuyers.filter((b) => b.product_id === mainProductId).map((b) => b.customer_id)
+      : [],
+  );
+  // Respondentes únicos da pesquisa que também compraram o produto principal.
+  // Usa uniqueBuyers (dedup por customer_id) pra não contar 2x a mesma pessoa.
+  const respondersOfMain = new Set(
+    uniqueBuyers
+      .filter((r) => r.customer_id && mainProductBuyers.has(r.customer_id))
+      .map((r) => r.customer_id as string),
+  );
+  const surveyConversion =
+    mainProductBuyers.size > 0 ? (respondersOfMain.size / mainProductBuyers.size) * 100 : null;
 
   // Distribuição A/B/C/D/E — 1 lead por cliente (não por resposta).
   // Usa qualification da resposta mais recente (já tá em uniqueBuyers).
@@ -137,7 +184,7 @@ export default async function Page({
 
       <PageBody>
         {/* KPIs */}
-        <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <section className="grid grid-cols-2 lg:grid-cols-6 gap-3">
           <StatCard label="Respostas (últimas 500)" value={<Hideable kind="count">{String(totalResponses)}</Hideable>} />
           <StatCard label="Únicas por contato" value={<Hideable kind="count">{String(uniqueByContact)}</Hideable>} />
           <StatCard
@@ -150,6 +197,26 @@ export default async function Page({
             label="% Conversão"
             value={<Hideable kind="count">{fmtPct(conversionRate)}</Hideable>}
             hint="Respostas válidas ÷ únicas por contato"
+          />
+          <StatCard
+            label="% Conv. alunos"
+            value={
+              surveyConversion != null ? (
+                <Hideable kind="count">{fmtPct(surveyConversion)}</Hideable>
+              ) : (
+                "—"
+              )
+            }
+            tone="accent"
+            hint={
+              mainProductBuyers.size > 0 ? (
+                <Hideable kind="count">
+                  {`${respondersOfMain.size} resp. ÷ ${mainProductBuyers.size} alunos${mainProductInfo ? ` · ${mainProductInfo.name}` : ""}`}
+                </Hideable>
+              ) : (
+                "Sem alunos do produto principal"
+              )
+            }
           />
           <StatCard
             label="Não classificados"
