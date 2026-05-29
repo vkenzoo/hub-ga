@@ -73,18 +73,24 @@ function clientName(c: NonNullable<AssinyEvent["client"]>): string | undefined {
 }
 
 /**
- * Assiny manda valores em CENTAVOS (transaction.amount=6700 → R$ 67,00).
- * Convertemos pra reais ao retornar pra alinhar com purchases.amount
- * (que armazena valor decimal em reais, igual Hotmart).
+ * Assiny manda valores em CENTAVOS (offer.amount=6700 → R$ 67,00).
  *
- * Nota: lost_purchases.amount_cents continua em centavos (campo já é nomeado
- * com sufixo _cents e é tratado como tal no display).
+ * IMPORTANTE: usamos `offer.amount` (valor do main isolado), NÃO
+ * `transaction.amount` (que é a SOMA main + todos os bumps).
+ *
+ * Quando o checkout tem order_bumps, a soma fica:
+ *   transaction.amount = offer.amount + sum(bumps.amount_with_tax)
+ *
+ * Se usássemos transaction.amount no main purchase + criássemos cada
+ * bump como purchase separada, o total ficaria DOBRADO.
+ *
+ * Bumps usam seu próprio amount_with_tax (tratado em handleAssinyEvent).
  */
 function extractAmount(e: AssinyEvent): number {
   const raw =
-    e.data.transaction?.amount ??
+    e.data.offer?.amount ??       // main isolado (preferido)
+    e.data.transaction?.amount ?? // fallback (sem bumps, sum === main)
     e.transaction?.amount ??
-    e.data.offer?.amount ??
     0;
   const n = typeof raw === "string" ? Number(raw) : raw;
   if (!Number.isFinite(n)) return 0;
