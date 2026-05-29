@@ -8,6 +8,9 @@ import { RevenueChart, PaymentMethodChart, PaymentPie } from "./charts";
 
 // Taxa de gateway aplicada sobre faturamento bruto (fórmula da Margem de Contribuição)
 const GATEWAY_FEE_RATE = 0.065;
+// Imposto sobre o investimento em mídia paga (Meta). Adicionado ao spend
+// pra calcular o investimento total e descontado da margem de contribuição.
+const META_TAX_RATE = 0.125;
 
 type Period = "today" | "7d" | "30d" | "month" | "all" | "custom";
 
@@ -159,7 +162,11 @@ export default async function Page({
     (s, r) => s + Number((r as { spend_cents: number }).spend_cents ?? 0),
     0,
   );
-  const investimento = investimentoCents / 100;
+  const spendMeta = investimentoCents / 100;
+  const impostoMeta = spendMeta * META_TAX_RATE;
+  // Investimento "total" = spend Meta + imposto. Esse é o número que
+  // entra em ROAS/CPA e que deduz da margem.
+  const investimento = spendMeta + impostoMeta;
   const taxas = receita * GATEWAY_FEE_RATE;
   const margem = receita - taxas - reembolsos - investimento;
   const margemPct = receita > 0 ? (margem / receita) * 100 : 0;
@@ -218,13 +225,15 @@ export default async function Page({
   }
   const revenueSeries = [...dailyMap.entries()].sort().map(([date, r]) => {
     const taxas = r.receita * GATEWAY_FEE_RATE;
-    const margem = r.receita - taxas - r.reembolsos - r.investimento;
-    const roas = r.investimento > 0 ? r.receita / r.investimento : null;
+    // Investimento diário = spend Meta + imposto (consistente com o KPI total)
+    const investimentoTotal = r.investimento * (1 + META_TAX_RATE);
+    const margem = r.receita - taxas - r.reembolsos - investimentoTotal;
+    const roas = investimentoTotal > 0 ? r.receita / investimentoTotal : null;
     return {
       date,
       receita: r.receita,
       reembolsos: r.reembolsos,
-      investimento: r.investimento,
+      investimento: investimentoTotal,
       margem,
       roas,
     };
@@ -351,18 +360,33 @@ export default async function Page({
           <StatCard
             label="Margem de contribuição"
             value={<Hideable kind="money">{fmtMoney(margem)}</Hideable>}
-            hint={<Hideable kind="count">{`${fmtPct(margemPct)} · taxa ${(GATEWAY_FEE_RATE * 100).toFixed(1)}%`}</Hideable>}
+            hint={
+              <Hideable kind="count">
+                {`${fmtPct(margemPct)} · gateway ${(GATEWAY_FEE_RATE * 100).toFixed(1)}% · Meta ${(META_TAX_RATE * 100).toFixed(1)}%`}
+              </Hideable>
+            }
           />
           <StatCard label="Compradores únicos" value={<Hideable kind="count">{fmtNum(compradores)}</Hideable>} hint="Cliente único no período" />
         </section>
 
         {/* KPIs secundários */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard label="Ticket médio (TMF)" value={<Hideable kind="money">{fmtMoney(tmf)}</Hideable>} hint="Receita ÷ compradores" />
           <StatCard
             label="Investimento"
             value={investimento > 0 ? <Hideable kind="money">{fmtMoney(investimento)}</Hideable> : "—"}
-            hint="Conecte Meta Ads"
+            hint={
+              investimento > 0 ? (
+                <Hideable kind="money">{`Spend ${fmtMoney(spendMeta)} + Imposto`}</Hideable>
+              ) : (
+                "Conecte Meta Ads"
+              )
+            }
+          />
+          <StatCard
+            label={`Imposto Meta (${(META_TAX_RATE * 100).toFixed(1)}%)`}
+            value={impostoMeta > 0 ? <Hideable kind="money">{fmtMoney(impostoMeta)}</Hideable> : "—"}
+            hint="Incluso no investimento e MC"
           />
           <StatCard
             label="ROAS"
