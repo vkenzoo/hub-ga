@@ -7,7 +7,7 @@ import { Hideable } from "@/components/hideable";
 import { RevenueChart, PaymentMethodChart, PaymentPie } from "./charts";
 
 // Taxa de gateway aplicada sobre faturamento bruto (fórmula da Margem de Contribuição)
-const GATEWAY_FEE_RATE = 0.065;
+const GATEWAY_FEE_RATE = 0.025;
 // Imposto sobre o investimento em mídia paga (Meta). Adicionado ao spend
 // pra calcular o investimento total e descontado da margem de contribuição.
 const META_TAX_RATE = 0.125;
