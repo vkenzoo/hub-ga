@@ -234,7 +234,88 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
         }
       : undefined,
   };
-  return recordPurchase(hub, normalized);
+  const mainResult = await recordPurchase(hub, normalized);
+
+  // ── Order bumps ──────────────────────────────────────────
+  // Cada bump no payload é UM produto extra comprado no mesmo checkout.
+  // Vira purchase separada (cliente igual, produto diferente, valor próprio).
+  // gateway_event_id usa sufixo _bump_<bump.id> pra evitar colisão com main.
+  const bumps = event.data.offer?.order_bumps ?? [];
+  if (bumps.length > 0 && (kind === "purchase_paid" || kind === "subscription_renewed")) {
+    for (const bump of bumps) {
+      if (!bump.product?.id) {
+        // Bump sem product.id → ignora (não dá pra mapear)
+        await logEvent(hub, "webhook.bump_no_product_id", {
+          level: "warn",
+          payload: { bump_id: bump.id, bump_name: bump.name, tx_id: tx?.id },
+        });
+        continue;
+      }
+
+      // Valor do bump em CENTAVOS no payload → converte pra reais
+      const bumpRaw =
+        bump.amount_with_tax ?? bump.amount_client ?? bump.product_price ?? 0;
+      const bumpAmount =
+        (typeof bumpRaw === "string" ? Number(bumpRaw) : bumpRaw) / 100;
+
+      const bumpNormalized: NormalizedPurchase = {
+        gateway: "assiny",
+        eventKind,
+        // Sufixo único pra cada bump na mesma tx
+        gatewayEventId: `${tx?.id ?? "?"}_bump_${bump.id}_${event.event}`,
+        txExternalId: tx?.id ?? undefined,
+        gatewayProductId: bump.product.id,
+        productNameHint: bump.product.name ?? bump.name,
+        paymentMethod: bump.payment_type ?? tx?.payment_type ?? undefined,
+        gatewayOfferId: bump.id,
+        gatewayOfferName: bump.name,
+        gatewayFunnelName: funnelRef?.trim() || undefined,
+        subscriptionCycle: bump.subscription?.cycle ?? event.data.subscription?.cycle ?? undefined,
+        customer: {
+          email: client.email,
+          name: clientName(client),
+          phone: client.phone,
+        },
+        amount: Number.isFinite(bumpAmount) ? bumpAmount : 0,
+        status: mapPurchaseStatus(eventKind),
+        utm,
+        affiliateId,
+        subscription: bump.subscription?.id
+          ? {
+              gatewaySubscriptionId: bump.subscription.id,
+              currentPeriodEnd:
+                event.data.subscription?.next_billing_date ??
+                event.data.subscription?.current_period_end ??
+                null,
+            }
+          : event.data.subscription?.id
+            ? {
+                gatewaySubscriptionId: event.data.subscription.id,
+                currentPeriodEnd:
+                  event.data.subscription.next_billing_date ??
+                  event.data.subscription.current_period_end ??
+                  null,
+              }
+            : undefined,
+      };
+
+      try {
+        await recordPurchase(hub, bumpNormalized);
+      } catch (err) {
+        console.error("[handleAssinyEvent] bump record failed:", err);
+        await logEvent(hub, "webhook.bump_failed", {
+          level: "error",
+          payload: {
+            bump_id: bump.id,
+            tx_id: tx?.id,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        });
+      }
+    }
+  }
+
+  return mainResult;
 }
 
 /**

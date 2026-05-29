@@ -26,6 +26,38 @@ const assinyClientSchema = z
   })
   .passthrough();
 
+// Cada order_bump é um produto extra comprado no mesmo checkout que o main.
+// Tem product/amount próprios. Vira purchase separada no hub.
+const assinyOrderBumpSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).transform(String),
+    name: z.string().optional(),
+    amount_with_tax: z.union([z.string(), z.number()]).optional(),
+    amount_client: z.union([z.string(), z.number()]).optional(),
+    product_price: z.union([z.string(), z.number()]).optional(),
+    type: z.string().optional(),
+    checkout_type: z.string().optional(),
+    payment_type: z.string().optional(),
+    recurrence: z.string().optional(),
+    product: z
+      .object({
+        id: z.union([z.string(), z.number()]).transform(String).optional(),
+        name: z.string().optional(),
+        producer_name: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    subscription: z
+      .object({
+        id: z.union([z.string(), z.number()]).transform(String).optional(),
+        recurrence: z.string().optional(),
+        cycle: z.number().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
 const assinyOfferSchema = z
   .object({
     id: z.union([z.string(), z.number()]).transform(String),
@@ -41,6 +73,7 @@ const assinyOfferSchema = z
       })
       .passthrough()
       .optional(),
+    order_bumps: z.array(assinyOrderBumpSchema).optional(),
   })
   .passthrough();
 
