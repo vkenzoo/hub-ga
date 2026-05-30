@@ -34,7 +34,7 @@ interface LostRow {
   resolved: boolean;
 }
 
-type Period = "today" | "7d" | "30d" | "month" | "all" | "custom";
+type Period = "today" | "yesterday" | "7d" | "30d" | "month" | "all" | "custom";
 type Filter = "all" | "pending" | "expired" | "abandoned";
 
 const BRT_OFFSET_MIN = 180;
@@ -51,13 +51,20 @@ function periodStart(p: Period, from?: string): Date | null {
   const nowLocalMs = Date.now() - BRT_OFFSET_MIN * 60_000;
   const local = new Date(nowLocalMs);
   local.setUTCHours(0, 0, 0, 0);
-  if (p === "7d") local.setUTCDate(local.getUTCDate() - 6);
+  if (p === "yesterday") local.setUTCDate(local.getUTCDate() - 1);
+  else if (p === "7d") local.setUTCDate(local.getUTCDate() - 6);
   else if (p === "30d") local.setUTCDate(local.getUTCDate() - 29);
   else if (p === "month") local.setUTCDate(1);
   return new Date(local.getTime() + BRT_OFFSET_MIN * 60_000);
 }
 
 function periodEnd(p: Period, to?: string): Date | null {
+  if (p === "yesterday") {
+    const nowLocalMs = Date.now() - BRT_OFFSET_MIN * 60_000;
+    const local = new Date(nowLocalMs);
+    local.setUTCHours(0, 0, 0, 0);
+    return new Date(local.getTime() + BRT_OFFSET_MIN * 60_000);
+  }
   if (p !== "custom" || !to) return null;
   const start = brtMidnightFromDateString(to);
   if (!start) return null;
@@ -65,7 +72,7 @@ function periodEnd(p: Period, to?: string): Date | null {
 }
 
 function parsePeriod(raw: string | undefined): Period {
-  if (raw === "today" || raw === "7d" || raw === "30d" || raw === "month" || raw === "all" || raw === "custom") return raw;
+  if (raw === "today" || raw === "yesterday" || raw === "7d" || raw === "30d" || raw === "month" || raw === "all" || raw === "custom") return raw;
   return "30d";
 }
 
@@ -218,8 +225,8 @@ export default async function Page({
         subtitle="PIX/boleto pendente, expirado e carrinho abandonado"
         right={
           <div className="flex flex-wrap gap-1.5">
-            {(["today", "7d", "30d", "month", "all"] as Period[]).map((p) => {
-              const label = p === "today" ? "Hoje" : p === "month" ? "Mês" : p === "all" ? "Tudo" : p;
+            {(["today", "yesterday", "7d", "30d", "month", "all"] as Period[]).map((p) => {
+              const label = p === "today" ? "Hoje" : p === "yesterday" ? "Ontem" : p === "month" ? "Mês" : p === "all" ? "Tudo" : p;
               const active = period === p;
               return (
                 <Link

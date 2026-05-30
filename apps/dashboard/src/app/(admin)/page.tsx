@@ -10,10 +10,11 @@ interface EventRow {
   created_at: string;
 }
 
-type Period = "today" | "7d" | "30d" | "month" | "all" | "custom";
+type Period = "today" | "yesterday" | "7d" | "30d" | "month" | "all" | "custom";
 
 const PERIOD_LABEL: Record<Period, string> = {
   today: "Hoje",
+  yesterday: "Ontem",
   "7d": "7d",
   "30d": "30d",
   month: "Mês",
@@ -48,15 +49,22 @@ function periodStart(p: Period, from?: string): Date | null {
   const local = new Date(nowLocalMs);
   local.setUTCHours(0, 0, 0, 0); // meia-noite "local"
 
-  if (p === "7d") local.setUTCDate(local.getUTCDate() - 6);
+  if (p === "yesterday") local.setUTCDate(local.getUTCDate() - 1);
+  else if (p === "7d") local.setUTCDate(local.getUTCDate() - 6);
   else if (p === "30d") local.setUTCDate(local.getUTCDate() - 29);
   else if (p === "month") local.setUTCDate(1);
   // "today" → mantém a meia-noite local
   return new Date(local.getTime() + BRT_OFFSET_MIN * 60_000);
 }
 
-/** Fim do range. Pra custom usa `to` (inclusivo, fim do dia em BRT). */
+/** Fim do range. Pra custom usa `to` (inclusivo, fim do dia em BRT). Ontem fecha em meia-noite de hoje. */
 function periodEnd(p: Period, to?: string): Date | null {
+  if (p === "yesterday") {
+    const nowLocalMs = Date.now() - BRT_OFFSET_MIN * 60_000;
+    const local = new Date(nowLocalMs);
+    local.setUTCHours(0, 0, 0, 0);
+    return new Date(local.getTime() + BRT_OFFSET_MIN * 60_000);
+  }
   if (p !== "custom") return null;
   if (!to) return null;
   const start = brtMidnightFromDateString(to);
@@ -66,7 +74,7 @@ function periodEnd(p: Period, to?: string): Date | null {
 }
 
 function parsePeriod(raw: string | undefined): Period {
-  if (raw === "7d" || raw === "30d" || raw === "month" || raw === "all" || raw === "custom") return raw;
+  if (raw === "yesterday" || raw === "7d" || raw === "30d" || raw === "month" || raw === "all" || raw === "custom") return raw;
   return "today";
 }
 
@@ -217,7 +225,7 @@ export default async function Page({
 
   const periodLabel = period === "custom" ? customLabel : PERIOD_LABEL[period];
 
-  const periods: Period[] = ["today", "7d", "30d", "month", "all"];
+  const periods: Period[] = ["today", "yesterday", "7d", "30d", "month", "all"];
 
   return (
     <>
