@@ -15,14 +15,19 @@ import { z } from "zod";
  * Doc: https://assiny.gitbook.io/assiny-docs/webhooks/payloads
  */
 
+// NOTA: usamos .nullish() (= optional + nullable) em vez de .optional() porque o
+// Assiny manda null EXPLÍCITO em campos ausentes (ex: offer.recurrence: null em
+// compra one-time, client.address: null sem endereço). .optional() rejeitaria
+// null e o webhook viraria "invalid_payload" — visto em produção 31/05/2026
+// (tx 93fdb10b-8362-4ea7-8e56-b6c0903d5287, ofertra UPSELL recurrence=null).
 const assinyClientSchema = z
   .object({
-    email: z.string().optional(),
-    full_name: z.string().optional(),
-    first_name: z.string().optional(),
-    last_name: z.string().optional(),
-    phone: z.string().optional(),
-    document: z.string().optional(),
+    email: z.string().nullish(),
+    full_name: z.string().nullish(),
+    first_name: z.string().nullish(),
+    last_name: z.string().nullish(),
+    phone: z.string().nullish(),
+    document: z.string().nullish(),
   })
   .passthrough();
 
@@ -31,99 +36,99 @@ const assinyClientSchema = z
 const assinyOrderBumpSchema = z
   .object({
     id: z.union([z.string(), z.number()]).transform(String),
-    name: z.string().optional(),
-    amount_with_tax: z.union([z.string(), z.number()]).optional(),
-    amount_client: z.union([z.string(), z.number()]).optional(),
-    product_price: z.union([z.string(), z.number()]).optional(),
-    type: z.string().optional(),
-    checkout_type: z.string().optional(),
-    payment_type: z.string().optional(),
-    recurrence: z.string().optional(),
+    name: z.string().nullish(),
+    amount_with_tax: z.union([z.string(), z.number()]).nullish(),
+    amount_client: z.union([z.string(), z.number()]).nullish(),
+    product_price: z.union([z.string(), z.number()]).nullish(),
+    type: z.string().nullish(),
+    checkout_type: z.string().nullish(),
+    payment_type: z.string().nullish(),
+    recurrence: z.string().nullish(),
     product: z
       .object({
-        id: z.union([z.string(), z.number()]).transform(String).optional(),
-        name: z.string().optional(),
-        producer_name: z.string().optional(),
+        id: z.union([z.string(), z.number()]).transform(String).nullish(),
+        name: z.string().nullish(),
+        producer_name: z.string().nullish(),
       })
       .passthrough()
-      .optional(),
+      .nullish(),
     subscription: z
       .object({
-        id: z.union([z.string(), z.number()]).transform(String).optional(),
-        recurrence: z.string().optional(),
-        cycle: z.number().optional(),
+        id: z.union([z.string(), z.number()]).transform(String).nullish(),
+        recurrence: z.string().nullish(),
+        cycle: z.number().nullish(),
       })
       .passthrough()
-      .optional(),
+      .nullish(),
   })
   .passthrough();
 
 const assinyOfferSchema = z
   .object({
     id: z.union([z.string(), z.number()]).transform(String),
-    name: z.string().optional(),
-    amount: z.union([z.string(), z.number()]).optional(),
-    recurrence: z.string().optional(),
-    type: z.string().optional(),
+    name: z.string().nullish(),
+    amount: z.union([z.string(), z.number()]).nullish(),
+    recurrence: z.string().nullish(),
+    type: z.string().nullish(),
     product: z
       .object({
-        id: z.union([z.string(), z.number()]).transform(String).optional(),
-        name: z.string().optional(),
-        producer_name: z.string().optional(),
+        id: z.union([z.string(), z.number()]).transform(String).nullish(),
+        name: z.string().nullish(),
+        producer_name: z.string().nullish(),
       })
       .passthrough()
-      .optional(),
-    order_bumps: z.array(assinyOrderBumpSchema).optional(),
+      .nullish(),
+    order_bumps: z.array(assinyOrderBumpSchema).nullish(),
   })
   .passthrough();
 
 const assinySubscriptionSchema = z
   .object({
-    id: z.union([z.string(), z.number()]).transform(String).optional(),
-    recurrence: z.string().optional(),
-    cycle: z.number().optional(),
-    is_subscription_renew: z.boolean().optional(),
-    next_billing_date: z.string().optional(),
-    current_period_end: z.string().optional(),
+    id: z.union([z.string(), z.number()]).transform(String).nullish(),
+    recurrence: z.string().nullish(),
+    cycle: z.number().nullish(),
+    is_subscription_renew: z.boolean().nullish(),
+    next_billing_date: z.string().nullish(),
+    current_period_end: z.string().nullish(),
   })
   .passthrough();
 
 const assinyTransactionSchema = z
   .object({
-    id: z.union([z.string(), z.number()]).transform(String).optional(),
-    amount: z.union([z.string(), z.number()]).optional(),
-    status: z.string().optional(),
-    payment_type: z.string().optional(),
-    cycle: z.number().optional(),
+    id: z.union([z.string(), z.number()]).transform(String).nullish(),
+    amount: z.union([z.string(), z.number()]).nullish(),
+    status: z.string().nullish(),
+    payment_type: z.string().nullish(),
+    cycle: z.number().nullish(),
     commissions: z
       .array(
         z
           .object({
-            user: z.union([z.string(), z.number(), z.object({}).passthrough()]).optional(),
-            email: z.string().optional(),
-            amount: z.union([z.string(), z.number()]).optional(),
-            type: z.string().optional(),
+            user: z.union([z.string(), z.number(), z.object({}).passthrough()]).nullish(),
+            email: z.string().nullish(),
+            amount: z.union([z.string(), z.number()]).nullish(),
+            type: z.string().nullish(),
           })
           .passthrough(),
       )
-      .optional(),
+      .nullish(),
   })
   .passthrough();
 
 const assinyMetadataSchema = z
   .object({
-    utm_source: z.string().optional(),
-    utm_medium: z.string().optional(),
-    utm_campaign: z.string().optional(),
-    utm_content: z.string().optional(),
-    utm_term: z.string().optional(),
-    funnel_id: z.string().optional(),
-    short_funnel_id: z.string().optional(),
-    node_id: z.string().optional(),
-    ip: z.string().optional(),
-    user_agent: z.string().optional(),
-    url_parameters: z.record(z.unknown()).optional(),
-    event_source_url: z.string().optional(),
+    utm_source: z.string().nullish(),
+    utm_medium: z.string().nullish(),
+    utm_campaign: z.string().nullish(),
+    utm_content: z.string().nullish(),
+    utm_term: z.string().nullish(),
+    funnel_id: z.string().nullish(),
+    short_funnel_id: z.string().nullish(),
+    node_id: z.string().nullish(),
+    ip: z.string().nullish(),
+    user_agent: z.string().nullish(),
+    url_parameters: z.record(z.unknown()).nullish(),
+    event_source_url: z.string().nullish(),
   })
   .passthrough();
 

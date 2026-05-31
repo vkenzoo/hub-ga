@@ -69,7 +69,7 @@ function mapPurchaseStatus(kind: EventKind): PurchaseStatus {
 function clientName(c: NonNullable<AssinyEvent["client"]>): string | undefined {
   if (c.full_name) return c.full_name;
   if (c.first_name && c.last_name) return `${c.first_name} ${c.last_name}`;
-  return c.first_name ?? c.last_name;
+  return c.first_name ?? c.last_name ?? undefined;
 }
 
 /**
@@ -113,7 +113,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
   const tx = txOf(event);
   const meta = metaOf(event);
   const client = clientOf(event);
-  let kind = classifyAssinyEvent(event.event, tx?.status);
+  let kind = classifyAssinyEvent(event.event, tx?.status ?? undefined);
 
   // Heurística: approved_purchase com subscription.cycle > 1 OU is_subscription_renew=true → renovação
   const isRenewal =
@@ -222,7 +222,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
     gatewayEventId,
     txExternalId: tx?.id ?? undefined,
     gatewayProductId: productGwId,
-    productNameHint: event.data.offer?.product?.name ?? event.data.offer?.name,
+    productNameHint: event.data.offer?.product?.name ?? event.data.offer?.name ?? undefined,
     paymentMethod: tx?.payment_type ?? undefined,
     occurredAt: txOccurredAt,
     gatewayOfferId: event.data.offer?.id ?? undefined,
@@ -232,7 +232,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
     customer: {
       email: client.email,
       name: clientName(client),
-      phone: client.phone,
+      phone: client.phone ?? undefined,
     },
     amount: extractAmount(event),
     status: mapPurchaseStatus(eventKind),
@@ -279,17 +279,17 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
         gatewayEventId: `${tx?.id ?? "?"}_bump_${bump.id}_${event.event}`,
         txExternalId: tx?.id ?? undefined,
         gatewayProductId: bump.product.id,
-        productNameHint: bump.product.name ?? bump.name,
+        productNameHint: bump.product.name ?? bump.name ?? undefined,
         paymentMethod: bump.payment_type ?? tx?.payment_type ?? undefined,
         occurredAt: txOccurredAt, // mesmo horário do main (compra simultânea)
         gatewayOfferId: bump.id,
-        gatewayOfferName: bump.name,
+        gatewayOfferName: bump.name ?? undefined,
         gatewayFunnelName: funnelRef?.trim() || undefined,
         subscriptionCycle: bump.subscription?.cycle ?? event.data.subscription?.cycle ?? undefined,
         customer: {
           email: client.email,
           name: clientName(client),
-          phone: client.phone,
+          phone: client.phone ?? undefined,
         },
         amount: Number.isFinite(bumpAmount) ? bumpAmount : 0,
         status: mapPurchaseStatus(eventKind),
@@ -411,16 +411,16 @@ async function handleAssinyLostEvent(
     platform: "assiny",
     kind: lostKind,
     externalEventId,
-    email: client.email,
-    phone: client.phone,
+    email: client.email ?? undefined,
+    phone: client.phone ?? undefined,
     productGatewayId: productGwId,
-    productNameHint: event.data.offer?.product?.name ?? event.data.offer?.name,
-    offerName: event.data.offer?.name,
+    productNameHint: event.data.offer?.product?.name ?? event.data.offer?.name ?? undefined,
+    offerName: event.data.offer?.name ?? undefined,
     amountCents: amount,
     utm,
-    funnelRef: m.short_funnel_id ?? m.funnel_id,
-    eventSourceUrl: m.event_source_url,
-    paymentMethod: tx?.payment_type,
+    funnelRef: m.short_funnel_id ?? m.funnel_id ?? undefined,
+    eventSourceUrl: m.event_source_url ?? undefined,
+    paymentMethod: tx?.payment_type ?? undefined,
     expiredQrCode: lostKind === "pix_expired" ? qrCode : undefined,
     occurredAt,
     rawPayload: event,
