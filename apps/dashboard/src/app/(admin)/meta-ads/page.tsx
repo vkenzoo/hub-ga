@@ -156,12 +156,12 @@ export default async function Page({
     q = q.is("classification", null);
   }
 
-  // Atribuições UTM no período
+  // Atribuições UTM no período (inclui customer_id pra contar compradores únicos)
   let attrQ = sb
     .from("utm_sales_attribution")
     .select(`
       purchase_id, campaign_id, adset_id, ad_id,
-      purchases!inner(amount, status, created_at)
+      purchases!inner(amount, status, created_at, customer_id)
     `)
     .eq("matched", true)
     .eq("is_active", true)
@@ -177,34 +177,59 @@ export default async function Page({
     campaign_id: string | null;
     adset_id: string | null;
     ad_id: string | null;
-    purchases: { amount: number; status: string; created_at: string } | Array<{ amount: number; status: string; created_at: string }>;
+    purchases:
+      | { amount: number; status: string; created_at: string; customer_id: string }
+      | Array<{ amount: number; status: string; created_at: string; customer_id: string }>;
   }>;
 
-  // Mapas de receita pra cada nível
-  const revByCampaign: Record<string, { revenue_cents: number; sales_count: number }> = {};
-  const revByAdset: Record<string, { revenue_cents: number; sales_count: number }> = {};
-  const revByAd: Record<string, { revenue_cents: number; sales_count: number }> = {};
+  // Mapas de receita + buyers únicos por nível.
+  // sales_count = nº de customer_ids distintos (estilo Meta Ads Manager: 4 compras do mesmo email = 1 venda).
+  // revenue_cents continua sendo a soma de todas as compras (não dedupada — dinheiro é dinheiro).
+  interface RevAgg { revenue_cents: number; buyers: Set<string> }
+  const aggCampaign: Record<string, RevAgg> = {};
+  const aggAdset: Record<string, RevAgg> = {};
+  const aggAd: Record<string, RevAgg> = {};
   for (const a of attrs) {
     const p = Array.isArray(a.purchases) ? a.purchases[0] : a.purchases;
     const amountCents = Math.round(Number(p?.amount ?? 0) * 100);
+    const customerId = p?.customer_id;
     if (a.campaign_id) {
-      const r = revByCampaign[a.campaign_id] ?? { revenue_cents: 0, sales_count: 0 };
+      const r = aggCampaign[a.campaign_id] ?? { revenue_cents: 0, buyers: new Set<string>() };
       r.revenue_cents += amountCents;
-      r.sales_count += 1;
-      revByCampaign[a.campaign_id] = r;
+      if (customerId) r.buyers.add(customerId);
+      aggCampaign[a.campaign_id] = r;
     }
     if (a.adset_id) {
-      const r = revByAdset[a.adset_id] ?? { revenue_cents: 0, sales_count: 0 };
+      const r = aggAdset[a.adset_id] ?? { revenue_cents: 0, buyers: new Set<string>() };
       r.revenue_cents += amountCents;
-      r.sales_count += 1;
-      revByAdset[a.adset_id] = r;
+      if (customerId) r.buyers.add(customerId);
+      aggAdset[a.adset_id] = r;
     }
     if (a.ad_id) {
-      const r = revByAd[a.ad_id] ?? { revenue_cents: 0, sales_count: 0 };
+      const r = aggAd[a.ad_id] ?? { revenue_cents: 0, buyers: new Set<string>() };
       r.revenue_cents += amountCents;
-      r.sales_count += 1;
-      revByAd[a.ad_id] = r;
+      if (customerId) r.buyers.add(customerId);
+      aggAd[a.ad_id] = r;
     }
+  }
+
+  // Reduz pra shape esperado por DrillDown: { revenue_cents, sales_count }
+  function toFinal(agg: Record<string, RevAgg>): Record<string, { revenue_cents: number; sales_count: number }> {
+    const out: Record<string, { revenue_cents: number; sales_count: number }> = {};
+    for (const [k, v] of Object.entries(agg)) {
+      out[k] = { revenue_cents: v.revenue_cents, sales_count: v.buyers.size };
+    }
+    return out;
+  }
+  const revByCampaign = toFinal(aggCampaign);
+  const revByAdset = toFinal(aggAdset);
+  const revByAd = toFinal(aggAd);
+
+  // Compradores únicos GLOBAIS (mesmo customer em 2 campanhas conta 1x no total).
+  const globalBuyers = new Set<string>();
+  for (const a of attrs) {
+    const p = Array.isArray(a.purchases) ? a.purchases[0] : a.purchases;
+    if (p?.customer_id) globalBuyers.add(p.customer_id);
   }
 
   // ── KPIs totais ────────────────────────────────────────
@@ -216,7 +241,9 @@ export default async function Page({
   const ctr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
   const cpc = totalClicks > 0 ? totalSpendCents / totalClicks : 0;
   const totalRevenueCents = Object.values(revByCampaign).reduce((s, r) => s + r.revenue_cents, 0);
-  const totalSales = Object.values(revByCampaign).reduce((s, r) => s + r.sales_count, 0);
+  // Total de vendas = compradores únicos globais (não soma sales_count das campanhas,
+  // pra não contar 2x quem comprou via campanhas diferentes).
+  const totalSales = globalBuyers.size;
 
   // Query string pra preservar filtros em links do ColumnsToggle
   const preservedQuery = (() => {
