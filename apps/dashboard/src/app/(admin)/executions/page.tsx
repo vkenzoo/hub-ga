@@ -4,6 +4,7 @@ import { PageBody, PageHeader } from "@/components/page";
 import { ReplayDuplicatesButton } from "./replay-duplicates-button";
 import { ReplayBumpsButton } from "./replay-bumps-button";
 import { ReplayInvalidButton } from "./replay-invalid-button";
+import { FixTimestampsButton } from "./fix-timestamps-button";
 
 interface ExecutionRow {
   id: string;
@@ -101,6 +102,7 @@ export default async function Page({
         subtitle="Auditoria de cada webhook recebido — payload, status, duração e cadeia de eventos."
         right={
           <div className="flex items-center gap-2">
+            <FixTimestampsButton />
             <ReplayBumpsButton />
             <ReplayDuplicatesButton />
             <ReplayInvalidButton />
