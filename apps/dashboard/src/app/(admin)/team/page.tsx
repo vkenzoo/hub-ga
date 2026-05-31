@@ -179,6 +179,35 @@ async function updateAccess(formData: FormData) {
   redirect(`/team?changed=${encodeURIComponent(email)}`);
 }
 
+async function toggleOpenAccess(formData: FormData) {
+  "use server";
+  const me = await requireSuperAdmin();
+  const sb = createSupabaseAdmin();
+
+  // Estado atual (cliente envia "on"/"off" pra evitar race se admin clica 2x)
+  const requested = String(formData.get("requested") ?? "off") === "on";
+
+  await sb
+    .from("app_settings")
+    .update({
+      open_access: requested,
+      open_access_updated_by: me.email,
+      open_access_updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", true);
+
+  await logAudit({
+    actor: me.email,
+    action: requested ? "team.open_access_enabled" : "team.open_access_disabled",
+    target: "app_settings",
+    payload: { open_access: requested },
+  });
+
+  revalidatePath("/team");
+  redirect(`/team?open=${requested ? "enabled" : "disabled"}`);
+}
+
 async function removeMember(formData: FormData) {
   "use server";
   const me = await requireSuperAdmin();
@@ -254,17 +283,31 @@ export default async function Page({
     changed?: string;
     removed?: string;
     e?: string;
+    open?: string;
   }>;
 }) {
   const sp = await searchParams;
   const me = await requireSuperAdmin();
   const sb = createSupabaseAdmin();
 
-  const { data } = await sb
-    .from("admin_users")
-    .select("email, role, allowed_sections, created_at, invited_by, invited_at")
-    .order("created_at", { ascending: true });
+  // Settings é resiliente: se a tabela não existir (pré-migration), assume defaults
+  const [teamRes, settingsRes] = await Promise.allSettled([
+    sb
+      .from("admin_users")
+      .select("email, role, allowed_sections, created_at, invited_by, invited_at")
+      .order("created_at", { ascending: true }),
+    sb
+      .from("app_settings")
+      .select("open_access, open_access_updated_by, open_access_updated_at")
+      .eq("id", true)
+      .maybeSingle(),
+  ]);
+  const data = teamRes.status === "fulfilled" ? teamRes.value.data : null;
+  const settings = settingsRes.status === "fulfilled" ? settingsRes.value.data : null;
   const rows = (data ?? []) as TeamRow[];
+  const openAccess = (settings?.open_access ?? false) === true;
+  const openAccessBy = (settings?.open_access_updated_by ?? null) as string | null;
+  const openAccessAt = (settings?.open_access_updated_at ?? null) as string | null;
 
   const errorMsg = sp.error ? ERROR_LABELS[sp.error] ?? "Algo deu errado." : null;
   const justInvited = sp.invited && sp.pwd;
@@ -275,13 +318,60 @@ export default async function Page({
         title="Equipe"
         subtitle={`${rows.length} pessoa${rows.length === 1 ? "" : "s"} com acesso ao hub.`}
         right={
-          <span className="chip">
-            <span className="dot bg-brand" /> Restrito a Admin
-          </span>
+          <div className="flex items-center gap-2">
+            <form action={toggleOpenAccess}>
+              <input type="hidden" name="requested" value={openAccess ? "off" : "on"} />
+              <button
+                type="submit"
+                className={`btn btn-sm ${openAccess ? "btn-primary" : "btn-ghost"}`}
+                title={
+                  openAccess
+                    ? "Acesso liberado pra qualquer email. Clique pra restringir só ao whitelist."
+                    : "Apenas o whitelist tem acesso. Clique pra liberar pra qualquer email autenticado."
+                }
+              >
+                <span className={`dot mr-1.5 ${openAccess ? "bg-accent animate-pulse" : "bg-text2"}`} />
+                {openAccess ? "Acesso aberto · ON" : "Acesso aberto · OFF"}
+              </button>
+            </form>
+            <span className="chip">
+              <span className="dot bg-brand" /> Restrito a Admin
+            </span>
+          </div>
         }
       />
 
       <PageBody>
+        {/* Aviso permanente quando open_access está ON — destaque vermelho pra não esquecer */}
+        {openAccess && (
+          <div className="card border-warn/40 bg-warn/10 px-4 py-3 text-sm">
+            <div className="flex items-start gap-3">
+              <span className="dot bg-warn animate-pulse mt-1.5" />
+              <div className="flex-1">
+                <div className="font-medium text-warn">⚠ Acesso aberto ATIVO</div>
+                <div className="text-xs text-text2 mt-1">
+                  Qualquer email cadastrado no Supabase Auth consegue entrar — sem precisar estar no whitelist abaixo.
+                  Recebem role <strong>member</strong> (acesso a tudo, exceto gerenciar a equipe).
+                  {openAccessBy && (
+                    <> Liberado por <strong>{openAccessBy}</strong>{openAccessAt ? ` em ${fmtDate(openAccessAt)}` : ""}.</>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {sp.open === "enabled" && (
+          <div className="card border-warn/30 bg-warn/5 px-4 py-2.5 text-sm text-warn">
+            <strong>Acesso aberto ATIVADO</strong> — qualquer email autenticado consegue entrar.
+          </div>
+        )}
+        {sp.open === "disabled" && (
+          <div className="card border-accent/30 bg-accent/5 px-4 py-2.5 text-sm text-accent">
+            <strong>Acesso restrito ao whitelist</strong> — só os emails abaixo conseguem entrar.
+          </div>
+        )}
+
         {sp.changed && (
           <div className="card border-accent/30 bg-accent/5 px-4 py-2.5 text-sm text-accent">
             Acesso de <strong>{sp.changed}</strong> atualizado.

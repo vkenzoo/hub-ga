@@ -108,21 +108,36 @@ export async function requireAdmin() {
   if (!user?.email) redirect("/login");
 
   const admin = createSupabaseAdmin();
-  const { data } = await admin
-    .from("admin_users")
-    .select("email, role, allowed_sections")
-    .eq("email", user.email)
-    .maybeSingle();
 
-  if (!data) redirect("/login?error=not_admin");
+  // Em paralelo: pega o registro do admin_users + flag global open_access.
+  // Settings é resiliente: se a tabela não existir (pré-migration) ou query falhar,
+  // assume open_access=false (comportamento original = whitelist obrigatório).
+  const [adminRes, settingsRes] = await Promise.allSettled([
+    admin
+      .from("admin_users")
+      .select("email, role, allowed_sections")
+      .eq("email", user.email)
+      .maybeSingle(),
+    admin.from("app_settings").select("open_access").eq("id", true).maybeSingle(),
+  ]);
+
+  const data = adminRes.status === "fulfilled" ? adminRes.value.data : null;
+  const settings = settingsRes.status === "fulfilled" ? settingsRes.value.data : null;
+  const openAccess = (settings?.open_access ?? false) === true;
+
+  // Se o usuário não está no whitelist E o toggle global está OFF → bloqueia.
+  // Se o toggle está ON → libera como 'member' com acesso a tudo (exceto gerenciar equipe).
+  if (!data && !openAccess) redirect("/login?error=not_admin");
 
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   const name = typeof meta.name === "string" ? meta.name : null;
   const avatarUrl = typeof meta.avatar_url === "string" ? meta.avatar_url : null;
-  const role = (data.role ?? "member") as AdminRole;
+  const role = (data?.role ?? "member") as AdminRole;
 
   // allowed_sections é text[] no banco. Filtra valores válidos pra não confiar em garbage.
-  const rawSections = (data.allowed_sections ?? null) as string[] | null;
+  // Quando open_access libera um usuário não-cadastrado, allowed_sections fica null
+  // (= todas as seções permitidas como member).
+  const rawSections = (data?.allowed_sections ?? null) as string[] | null;
   const allowedSections: Section[] | null = rawSections
     ? rawSections.filter((s): s is Section => ALL_SECTIONS.includes(s as Section))
     : null;
