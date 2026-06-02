@@ -107,16 +107,22 @@ export async function requireAdmin() {
 
   if (!user?.email) redirect("/login");
 
+  // Normaliza pra eliminar case-mismatch entre auth.users (pode ter casing original)
+  // e admin_users (cadastra via team page que já lowercase). Sem isso, "Fulano@x.com"
+  // vs "fulano@x.com" não casaria → loop de redirect.
+  const userEmail = user.email.toLowerCase().trim();
+
   const admin = createSupabaseAdmin();
 
   // Em paralelo: pega o registro do admin_users + flag global open_access.
   // Settings é resiliente: se a tabela não existir (pré-migration) ou query falhar,
   // assume open_access=false (comportamento original = whitelist obrigatório).
+  // ilike permite match case-insensitive (defensivo).
   const [adminRes, settingsRes] = await Promise.allSettled([
     admin
       .from("admin_users")
       .select("email, role, allowed_sections")
-      .eq("email", user.email)
+      .ilike("email", userEmail)
       .maybeSingle(),
     admin.from("app_settings").select("open_access").eq("id", true).maybeSingle(),
   ]);
