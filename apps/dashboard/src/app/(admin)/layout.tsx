@@ -4,6 +4,8 @@ import {
   requireAdmin,
   pathToSection,
   canAccessSection,
+  SECTION_PATH,
+  type Section,
 } from "@/lib/auth";
 import { Sidebar } from "@/components/nav";
 import { HideValuesProvider, HIDE_VALUES_COOKIE_NAME } from "@/components/hide-values-context";
@@ -32,15 +34,31 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const ck = await cookies();
   const hideValues = ck.get(HIDE_VALUES_COOKIE_NAME)?.value === "1";
 
-  // Bloqueia membros em rotas admin-only
-  if (isAdminOnlyPath(pathname) && auth.role !== "admin") {
-    redirect("/?error=no_access");
+  // Helper: pra onde mandar o member quando ele bate em uma rota proibida.
+  // SEMPRE redireciona pra uma seção que ele PODE acessar — senão entra em loop
+  // (ex: member sem acesso a "home" sendo redirecionado pra "/" que de novo é "home").
+  function fallbackPath(): string {
+    if (auth.role === "admin") return "/";
+    const allowed = auth.allowedSections ?? null;
+    // Member sem restrições (null) → home funciona
+    if (allowed === null) return "/";
+    // Member com seções → primeira permitida (que não seja "home" se ele não tiver home)
+    const first = allowed[0] as Section | undefined;
+    return first ? SECTION_PATH[first] : "/login?error=no_sections";
   }
 
-  // Bloqueia seções fora da lista permitida (admin sempre passa)
+  // Bloqueia membros em rotas admin-only
+  if (isAdminOnlyPath(pathname) && auth.role !== "admin") {
+    redirect(`${fallbackPath()}?error=no_access`);
+  }
+
+  // Bloqueia seções fora da lista permitida (admin sempre passa).
+  // Se a seção atual JÁ é o fallback, não redireciona (evita loop) — só renderiza
+  // o layout sem conteúdo permitido. Isso só acontece em corner case.
   const section = pathToSection(pathname);
   if (section && !canAccessSection(auth, section)) {
-    redirect("/?error=no_access");
+    const fb = fallbackPath();
+    if (fb !== pathname) redirect(`${fb}?error=no_access`);
   }
 
   return (

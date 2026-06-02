@@ -56,7 +56,7 @@ export const SECTION_LABEL: Record<Section, string> = {
   meta_ads: "Meta Ads",
 };
 
-const SECTION_PATH: Record<Section, string> = {
+export const SECTION_PATH: Record<Section, string> = {
   home: "/",
   sales: "/sales",
   subscriptions: "/subscriptions",
