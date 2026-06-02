@@ -40,7 +40,10 @@ export async function updateSession(req: NextRequest) {
     return NextResponse.redirect(redirect);
   }
 
-  if (user && pathname === "/login") {
+  // Só redireciona pra "/" se o usuário autenticado tá em /login SEM erro.
+  // Se tem ?error=... (ex: not_admin), preserva — senão entra em loop com
+  // requireAdmin que joga de volta pra /login.
+  if (user && pathname === "/login" && !req.nextUrl.searchParams.has("error")) {
     const redirect = req.nextUrl.clone();
     redirect.pathname = "/";
     redirect.search = "";
