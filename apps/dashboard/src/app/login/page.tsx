@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { signInWithPassword } from "./actions";
+import { signInWithPassword, signOut } from "./actions";
 
 export default async function LoginPage({
   searchParams,
@@ -30,7 +30,17 @@ export default async function LoginPage({
 
         {sp.error === "not_admin" && (
           <Banner tone="danger">
-            Email fora da whitelist <code className="font-mono">admin_users</code>.
+            <div className="mb-2">
+              Email fora da whitelist <code className="font-mono">admin_users</code>.
+            </div>
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="text-xs underline hover:no-underline"
+              >
+                Sair desta conta e tentar outro email
+              </button>
+            </form>
           </Banner>
         )}
         {sp.error === "invalid_credentials" && (
