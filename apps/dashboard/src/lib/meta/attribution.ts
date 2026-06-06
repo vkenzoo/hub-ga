@@ -42,22 +42,31 @@ interface ResolveResult {
 function extractId(field: string | null | undefined): string | null {
   if (!field) return null;
   const v = field.trim();
+  // 1. Pipe: "name|id" OU "name|id::fbtoken::" (Meta injeta ::fbclid:: no fim)
   const lastPipe = v.lastIndexOf("|");
   if (lastPipe >= 0) {
-    const after = v.slice(lastPipe + 1).trim();
+    let after = v.slice(lastPipe + 1).trim();
+    const dc = after.indexOf("::");
+    if (dc >= 0) after = after.slice(0, dc).trim();
     if (/^\d+$/.test(after)) return after;
   }
+  // 2. Double-colon puro: "id::fbtoken::"
   const firstDoubleColon = v.indexOf("::");
   if (firstDoubleColon > 0) {
     const before = v.slice(0, firstDoubleColon).trim();
     if (/^\d+$/.test(before)) return before;
   }
+  // 3. Dash: "name-id" (10+ dígitos)
   const lastDash = v.lastIndexOf("-");
   if (lastDash >= 0) {
     const after = v.slice(lastDash + 1).trim();
     if (/^\d{10,}$/.test(after)) return after;
   }
+  // 4. Plain id
   if (/^\d+$/.test(v)) return v;
+  // 5. Fallback: primeiro run de 10+ dígitos em qualquer lugar
+  const m = v.match(/\d{10,}/);
+  if (m) return m[0];
   return null;
 }
 
@@ -65,8 +74,11 @@ function extractName(field: string | null | undefined): string | null {
   if (!field) return null;
   const v = field.trim();
   const lastPipe = v.lastIndexOf("|");
-  if (lastPipe >= 0 && /^\d+$/.test(v.slice(lastPipe + 1).trim())) {
-    return v.slice(0, lastPipe).trim();
+  if (lastPipe >= 0) {
+    let after = v.slice(lastPipe + 1).trim();
+    const dc = after.indexOf("::");
+    if (dc >= 0) after = after.slice(0, dc).trim();
+    if (/^\d+$/.test(after)) return v.slice(0, lastPipe).trim();
   }
   const lastDash = v.lastIndexOf("-");
   if (lastDash >= 0 && /^\d{10,}$/.test(v.slice(lastDash + 1).trim())) {

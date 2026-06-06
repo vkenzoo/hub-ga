@@ -49,14 +49,18 @@ function extractId(field: string | null | undefined): string | null {
   if (!field) return null;
   const v = field.trim();
 
-  // 1. Pipe (nosso template ideal): "name|id"
+  // 1. Pipe (nosso template ideal): "name|id" OU "name|id::fbtoken::"
+  // A Meta auto-injeta "::<fbclid>::" no FIM do utm_content, então o trecho
+  // após o pipe vira "id::token::". Tiramos o sufixo :: antes de testar.
   const lastPipe = v.lastIndexOf("|");
   if (lastPipe >= 0) {
-    const after = v.slice(lastPipe + 1).trim();
+    let after = v.slice(lastPipe + 1).trim();
+    const dc = after.indexOf("::");
+    if (dc >= 0) after = after.slice(0, dc).trim();
     if (/^\d+$/.test(after)) return after;
   }
 
-  // 2. Double-colon (Meta às vezes auto-injeta): "id::fbtoken::"
+  // 2. Double-colon (Meta às vezes auto-injeta sem pipe): "id::fbtoken::"
   const firstDoubleColon = v.indexOf("::");
   if (firstDoubleColon > 0) {
     const before = v.slice(0, firstDoubleColon).trim();
@@ -74,6 +78,12 @@ function extractId(field: string | null | undefined): string | null {
   // 4. Plain id
   if (/^\d+$/.test(v)) return v;
 
+  // 5. Fallback: primeiro run de 10+ dígitos em qualquer lugar. IDs do Meta têm
+  // 15-17 dígitos → pega o id em formatos esquisitos sem casar números curtos
+  // dentro de nomes (ex: "AD 11", "Opção 01").
+  const m = v.match(/\d{10,}/);
+  if (m) return m[0];
+
   return null;
 }
 
@@ -86,8 +96,13 @@ function extractName(field: string | null | undefined): string | null {
   const v = field.trim();
   // Mesma ordem do extractId pra consistência
   const lastPipe = v.lastIndexOf("|");
-  if (lastPipe >= 0 && /^\d+$/.test(v.slice(lastPipe + 1).trim())) {
-    return v.slice(0, lastPipe).trim();
+  if (lastPipe >= 0) {
+    // "name|id" ou "name|id::token::" → nome é tudo antes do pipe (se o que vem
+    // depois, sem o sufixo ::, for um id numérico).
+    let after = v.slice(lastPipe + 1).trim();
+    const dc = after.indexOf("::");
+    if (dc >= 0) after = after.slice(0, dc).trim();
+    if (/^\d+$/.test(after)) return v.slice(0, lastPipe).trim();
   }
   const firstDoubleColon = v.indexOf("::");
   if (firstDoubleColon > 0 && /^\d+$/.test(v.slice(0, firstDoubleColon).trim())) {
