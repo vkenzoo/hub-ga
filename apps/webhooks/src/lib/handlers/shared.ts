@@ -620,36 +620,59 @@ export async function recordLostPurchase(
     if (data) productId = data.id as string;
   }
 
-  // 5. Insere
-  const { data: inserted, error } = await hub
-    .from("lost_purchases")
-    .insert({
-      platform: lp.platform,
-      kind: lp.kind,
-      external_event_id: lp.externalEventId,
-      email: lp.email ?? null,
-      phone: lp.phone ?? null,
-      phone_normalized: phoneNorm,
-      customer_id: customerId,
-      product_gateway_id: lp.productGatewayId ?? null,
-      product_id: productId,
-      product_name: lp.productNameHint ?? null,
-      offer_name: lp.offerName ?? null,
-      amount_cents: lp.amountCents,
-      utm_source: lp.utm?.source ?? null,
-      utm_medium: lp.utm?.medium ?? null,
-      utm_campaign: lp.utm?.campaign ?? null,
-      utm_content: lp.utm?.content ?? null,
-      utm_term: lp.utm?.term ?? null,
-      funnel_ref: lp.funnelRef ?? null,
-      event_source_url: lp.eventSourceUrl ?? null,
-      payment_method: lp.paymentMethod ?? null,
-      pix_qr_code: lp.pixQrCode ?? null,
-      occurred_at: lp.occurredAt,
-      raw_payload: lp.rawPayload ?? null,
-    })
-    .select("id")
-    .single();
+  // 5. Insere. Tenta com pix_qr_code primeiro (nome novo, pós migration 0032).
+  // Se falhar com "column does not exist", retry com expired_qr_code (nome legado)
+  // pra não derrubar webhooks durante janela de migração.
+  const baseRow = {
+    platform: lp.platform,
+    kind: lp.kind,
+    external_event_id: lp.externalEventId,
+    email: lp.email ?? null,
+    phone: lp.phone ?? null,
+    phone_normalized: phoneNorm,
+    customer_id: customerId,
+    product_gateway_id: lp.productGatewayId ?? null,
+    product_id: productId,
+    product_name: lp.productNameHint ?? null,
+    offer_name: lp.offerName ?? null,
+    amount_cents: lp.amountCents,
+    utm_source: lp.utm?.source ?? null,
+    utm_medium: lp.utm?.medium ?? null,
+    utm_campaign: lp.utm?.campaign ?? null,
+    utm_content: lp.utm?.content ?? null,
+    utm_term: lp.utm?.term ?? null,
+    funnel_ref: lp.funnelRef ?? null,
+    event_source_url: lp.eventSourceUrl ?? null,
+    payment_method: lp.paymentMethod ?? null,
+    occurred_at: lp.occurredAt,
+    raw_payload: lp.rawPayload ?? null,
+  };
+
+  let inserted: { id: unknown } | null = null;
+  let error: { message?: string; code?: string } | null = null;
+
+  // Primeira tentativa: nome novo
+  {
+    const r = await hub
+      .from("lost_purchases")
+      .insert({ ...baseRow, pix_qr_code: lp.pixQrCode ?? null })
+      .select("id")
+      .single();
+    inserted = (r.data ?? null) as { id: unknown } | null;
+    error = (r.error ?? null) as { message?: string; code?: string } | null;
+  }
+
+  // Fallback: se erro menciona "pix_qr_code" não existir, tenta com nome antigo
+  if (error && /pix_qr_code/i.test(String(error.message ?? ""))) {
+    console.warn("[recordLostPurchase] pix_qr_code missing, falling back to expired_qr_code");
+    const r2 = await hub
+      .from("lost_purchases")
+      .insert({ ...baseRow, expired_qr_code: lp.pixQrCode ?? null })
+      .select("id")
+      .single();
+    inserted = (r2.data ?? null) as { id: unknown } | null;
+    error = (r2.error ?? null) as { message?: string; code?: string } | null;
+  }
 
   if (error || !inserted) {
     console.error("[recordLostPurchase] insert failed:", error);
