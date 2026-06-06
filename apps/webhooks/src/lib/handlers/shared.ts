@@ -99,7 +99,7 @@ export interface NormalizedLostPurchase {
   funnelRef?: string;
   eventSourceUrl?: string;
   paymentMethod?: string;
-  expiredQrCode?: string;
+  pixQrCode?: string;
   occurredAt: string;          // ISO
   rawPayload?: unknown;
 }
@@ -644,7 +644,7 @@ export async function recordLostPurchase(
       funnel_ref: lp.funnelRef ?? null,
       event_source_url: lp.eventSourceUrl ?? null,
       payment_method: lp.paymentMethod ?? null,
-      expired_qr_code: lp.expiredQrCode ?? null,
+      pix_qr_code: lp.pixQrCode ?? null,
       occurred_at: lp.occurredAt,
       raw_payload: lp.rawPayload ?? null,
     })

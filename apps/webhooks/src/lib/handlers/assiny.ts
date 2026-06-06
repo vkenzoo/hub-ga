@@ -421,7 +421,9 @@ async function handleAssinyLostEvent(
     funnelRef: m.short_funnel_id ?? m.funnel_id ?? undefined,
     eventSourceUrl: m.event_source_url ?? undefined,
     paymentMethod: tx?.payment_type ?? undefined,
-    expiredQrCode: lostKind === "pix_expired" ? qrCode : undefined,
+    // PIX QR code é útil em pix_pending (lembrar o cliente) e pix_expired
+    // (gerar novo PIX). Capturamos pros dois pra UI de recuperação poder copiar.
+    pixQrCode: (lostKind === "pix_pending" || lostKind === "pix_expired") ? qrCode : undefined,
     occurredAt,
     rawPayload: event,
   };

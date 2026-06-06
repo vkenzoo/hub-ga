@@ -4,6 +4,7 @@ import { requireAdmin, canAccessSection } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { PageBody, PageHeader, StatCard } from "@/components/page";
 import { Hideable } from "@/components/hideable";
+import { CopyPixButton } from "./copy-pix-button";
 
 // ── Tipos ────────────────────────────────────────────────────
 type LostKind =
@@ -30,6 +31,7 @@ interface LostRow {
   funnel_ref: string | null;
   event_source_url: string | null;
   payment_method: string | null;
+  pix_qr_code: string | null;
   occurred_at: string;
   resolved: boolean;
 }
@@ -159,7 +161,7 @@ async function listLost(filters: {
       `id, platform, kind, email, phone, phone_normalized, customer_id,
        product_name, offer_name, amount_cents,
        utm_source, utm_medium, utm_campaign,
-       funnel_ref, event_source_url, payment_method,
+       funnel_ref, event_source_url, payment_method, pix_qr_code,
        occurred_at, resolved`,
     )
     .order("occurred_at", { ascending: false })
@@ -395,6 +397,7 @@ export default async function Page({
                     <td className="px-3 py-2.5 text-text2 capitalize">{r.platform}</td>
                     <td className="px-3 py-2.5 text-right">
                       <div className="flex justify-end gap-1.5">
+                        {r.pix_qr_code && <CopyPixButton code={r.pix_qr_code} />}
                         {wa && (
                           <a
                             href={wa}
