@@ -42,7 +42,7 @@ async function replayExecution(formData: FormData): Promise<ReplayResult> {
   const base =
     process.env.WEBHOOKS_BASE_URL ??
     process.env.NEXT_PUBLIC_WEBHOOKS_BASE_URL ??
-    "https://webhooks.hubgeracaoa.com";
+    "https://hub-ga-webhooks.vercel.app";
   const url = `${base.replace(/\/$/, "")}/api/webhooks/${exec.gateway}`;
 
   const headers: Record<string, string> = {};

@@ -45,7 +45,7 @@ export async function POST() {
   const base =
     process.env.WEBHOOKS_BASE_URL ??
     process.env.NEXT_PUBLIC_WEBHOOKS_BASE_URL ??
-    "https://webhooks.hubgeracaoa.com";
+    "https://hub-ga-webhooks.vercel.app";
 
   let replayed = 0;
   let failed = 0;
