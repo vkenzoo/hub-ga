@@ -44,6 +44,10 @@ interface InsightRow {
   clicks?: string;
   reach?: string;
   actions?: Array<{ action_type: string; value: string }>;
+  // Métricas de vídeo — cada uma vem como array de {action_type:"video_view", value}
+  video_play_actions?: Array<{ action_type: string; value: string }>;          // plays 3s
+  video_thruplay_watched_actions?: Array<{ action_type: string; value: string }>; // ThruPlay
+  video_p100_watched_actions?: Array<{ action_type: string; value: string }>;   // assistiu 100%
 }
 
 /**
@@ -119,7 +123,7 @@ async function fetchInsightsForAccount(opts: FetchInsightsOpts): Promise<Insight
   let params: Record<string, string> = {
     level: "ad",
     fields:
-      "spend,impressions,clicks,reach,actions,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name",
+      "spend,impressions,clicks,reach,actions,video_play_actions,video_thruplay_watched_actions,video_p100_watched_actions,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name",
     time_increment: "1",
     time_range: JSON.stringify({ since, until }),
     limit: "500",
@@ -238,6 +242,10 @@ export async function syncMetaConnection(
             "offsite_conversion.fb_pixel_initiate_checkout",
             "omni_initiated_checkout",
           ]),
+          // Métricas de vídeo: cada array tem 1 entry {action_type:"video_view", value}
+          video_3s_views: pickAction(i.video_play_actions, ["video_view"]),
+          video_thruplays: pickAction(i.video_thruplay_watched_actions, ["video_view"]),
+          video_p100_views: pickAction(i.video_p100_watched_actions, ["video_view"]),
           classification: classifyCampaign(i.campaign_name ?? null, rules),
           last_synced_at: new Date().toISOString(),
         }));
