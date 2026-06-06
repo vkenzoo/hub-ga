@@ -19,7 +19,14 @@ const REPLAYABLE_STATUSES = new Set([
   "duplicate",
 ]);
 
-async function replayExecution(formData: FormData) {
+interface ReplayResult {
+  ok: boolean;
+  httpStatus?: number;
+  reason?: string;
+  error?: string;
+}
+
+async function replayExecution(formData: FormData): Promise<ReplayResult> {
   "use server";
   const me = await requireAdmin();
   const id = String(formData.get("id"));
@@ -30,7 +37,7 @@ async function replayExecution(formData: FormData) {
     .eq("id", id)
     .maybeSingle();
 
-  if (!exec) return;
+  if (!exec) return { ok: false, error: "execution_not_found" };
 
   const base =
     process.env.WEBHOOKS_BASE_URL ??
@@ -50,13 +57,21 @@ async function replayExecution(formData: FormData) {
   headers["content-type"] = headers["content-type"] ?? "application/json";
   headers["x-hub-replay-of"] = id;
 
-  await fetch(url, {
-    method: "POST",
-    headers,
-    body: exec.raw_body,
-  }).catch((err) => {
+  let result: ReplayResult;
+  try {
+    const res = await fetch(url, { method: "POST", headers, body: exec.raw_body });
+    let reason: string | undefined;
+    try {
+      const body = (await res.json()) as { result?: { skipped?: boolean; reason?: string } };
+      reason = body?.result?.reason;
+    } catch {
+      // resposta sem JSON — ignora
+    }
+    result = { ok: res.ok && !reason, httpStatus: res.status, reason };
+  } catch (err) {
     console.error("[replayExecution] fetch failed:", err);
-  });
+    result = { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 
   await logAudit({
     actor: me.email,
@@ -66,11 +81,13 @@ async function replayExecution(formData: FormData) {
       gateway: exec.gateway,
       previous_status: exec.status,
       raw_event_type: exec.raw_event_type,
+      replay_result: result,
     },
   });
 
   revalidatePath("/executions");
   revalidatePath(`/executions/${id}`);
+  return result;
 }
 
 interface ExecutionRow {
