@@ -29,12 +29,13 @@ export async function POST(req: Request) {
 
   const hub = createHubServiceClient();
 
-  // Pega últimas 1000 purchases pagas que NÃO têm atribuição com matched=true
+  // Pega últimas 1000 purchases pagas. Re-resolve quem não matchou OU matchou só
+  // a nível campanha/adset (ad_id null) — esses podem subir pra nível criativo.
   const { data: purchases, error } = await hub
     .from("purchases")
     .select(
       `id, utm_source, utm_medium, utm_campaign, utm_content, utm_term, created_at,
-       utm_sales_attribution(id, matched)`,
+       utm_sales_attribution(id, matched, ad_id)`,
     )
     .eq("status", "paid")
     .order("created_at", { ascending: false })
@@ -44,7 +45,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "query_failed", detail: error.message }, { status: 500 });
   }
 
-  type AttrRel = { id: string; matched: boolean } | Array<{ id: string; matched: boolean }>;
+  type AttrRow = { id: string; matched: boolean; ad_id: string | null };
+  type AttrRel = AttrRow | AttrRow[];
   type Row = {
     id: string;
     utm_source: string | null;
@@ -62,11 +64,11 @@ export async function POST(req: Request) {
   let skipped = 0;
 
   for (const r of rows) {
-    // Pula se já tem atribuição com matched=true
+    // Pula só se já resolveu a nível de criativo (matched + ad_id presente).
     const attr = Array.isArray(r.utm_sales_attribution)
       ? r.utm_sales_attribution[0]
       : r.utm_sales_attribution;
-    if (attr?.matched === true) {
+    if (attr?.matched === true && attr?.ad_id) {
       skipped++;
       continue;
     }

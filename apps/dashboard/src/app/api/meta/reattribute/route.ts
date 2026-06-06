@@ -27,7 +27,7 @@ export async function POST() {
     .from("purchases")
     .select(
       `id, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-       utm_sales_attribution(id, matched)`,
+       utm_sales_attribution(id, matched, ad_id)`,
     )
     .eq("status", "paid")
     .order("created_at", { ascending: false })
@@ -40,7 +40,8 @@ export async function POST() {
     );
   }
 
-  type AttrRel = { id: string; matched: boolean } | Array<{ id: string; matched: boolean }> | null;
+  type AttrRow = { id: string; matched: boolean; ad_id: string | null };
+  type AttrRel = AttrRow | AttrRow[] | null;
   type Row = {
     id: string;
     utm_source: string | null;
@@ -61,7 +62,10 @@ export async function POST() {
     const attr = Array.isArray(r.utm_sales_attribution)
       ? r.utm_sales_attribution[0]
       : r.utm_sales_attribution;
-    if (attr?.matched === true) {
+    // Pula só se JÁ resolveu a nível de criativo (matched + ad_id presente).
+    // Quem matchou só a nível campanha/adset (ad_id null) é re-resolvido — agora
+    // que o parser extrai o ad_id do formato "name|id::token::", pode subir de nível.
+    if (attr?.matched === true && attr?.ad_id) {
       skipped++;
       continue;
     }
