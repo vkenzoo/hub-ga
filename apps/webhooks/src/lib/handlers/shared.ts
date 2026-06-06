@@ -676,7 +676,10 @@ export async function recordLostPurchase(
 
   if (error || !inserted) {
     console.error("[recordLostPurchase] insert failed:", error);
-    return { skipped: true, reason: "insert_failed" };
+    // Inclui mensagem do erro no reason pra ficar visível em webhook_executions.error_message
+    // (vide route que mapeia result.reason). Trunca pra 200 chars pra não inchar a coluna.
+    const msg = error?.message ? `: ${String(error.message).slice(0, 200)}` : "";
+    return { skipped: true, reason: `insert_failed${msg}` };
   }
 
   await logEvent(hub, "lost_purchase.recorded", {
