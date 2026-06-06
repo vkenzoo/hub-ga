@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { Hideable } from "@/components/hideable";
 import { logAudit } from "@/lib/audit";
 import { PageBody, PageHeader } from "@/components/page";
+import { ReplayButton } from "./replay-button";
 
 // Quais status podem ser reprocessados (tipicamente os que não criaram purchase
 // e podem ter sido resolvidos por configuração posterior).
@@ -225,18 +226,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         subtitle={`${e.gateway} · ${fmtDateTime(e.created_at)}`}
         right={
           <div className="flex items-center gap-2">
-            {canReplay && (
-              <form action={replayExecution}>
-                <input type="hidden" name="id" value={e.id} />
-                <button
-                  className="btn btn-sm btn-primary"
-                  title="Reenviar este webhook pra rota de produção. Útil quando o motivo do skip já foi resolvido (ex: produto cadastrado depois)."
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                  Reprocessar
-                </button>
-              </form>
-            )}
+            {canReplay && <ReplayButton action={replayExecution} id={e.id} />}
             <Link href="/executions" className="btn btn-sm">
               ← Executions
             </Link>
