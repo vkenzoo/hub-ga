@@ -32,21 +32,8 @@ where p.gateway = 'hotmart'
   and sub.producer_val is not null
   and p.net_amount is null;
 
--- ── Backfill Assiny (main): transaction.net_amount em centavos ──
-update purchases p
-set net_amount = (sub.net_cents::numeric / 100)
-from (
-  select
-    we.gateway_event_id,
-    coalesce(
-      we.raw_body::jsonb #>> '{data,transaction,net_amount}',
-      we.raw_body::jsonb #>> '{data,offer,amount_client}'
-    ) as net_cents
-  from webhook_executions we
-  where we.gateway = 'assiny'
-) sub
-where p.gateway = 'assiny'
-  and p.gateway_event_id = sub.gateway_event_id
-  and sub.net_cents is not null
-  and sub.net_cents ~ '^\d+$'
-  and p.net_amount is null;
+-- Assiny NÃO recebe backfill de net: não tem afiliado e a taxa de gateway é
+-- mínima, então receita = bruto (amount). O backfill antigo usava
+-- transaction.net_amount (líquido da transação inteira: principal + bumps) e
+-- gravava no principal, inflando o faturamento (net > bruto). Mantemos net_amount
+-- NULL pra Assiny → dashboards usam o valor cheio.
