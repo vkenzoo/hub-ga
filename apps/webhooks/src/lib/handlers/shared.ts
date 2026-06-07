@@ -59,6 +59,8 @@ export interface NormalizedPurchase {
   };
   affiliateId?: string;
   affiliateName?: string;
+  /** Receita líquida real do produtor (Hotmart: comissão PRODUCER; Assiny: net). */
+  netAmount?: number;
   /**
    * Timestamp original da transação (do payload do gateway). Quando ausente,
    * usa NOW() (padrão). Importante pra replays — evita marcar venda antiga
@@ -324,6 +326,7 @@ export async function recordPurchase(
     utm_term: p.utm?.term ?? null,
     affiliate_id: p.affiliateId ?? null,
     affiliate_name: p.affiliateName ?? null,
+    net_amount: p.netAmount ?? null,
     payment_method: p.paymentMethod ?? null,
     gateway_offer_id: p.gatewayOfferId ?? null,
     gateway_offer_name: p.gatewayOfferName ?? null,

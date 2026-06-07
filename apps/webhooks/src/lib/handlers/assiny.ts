@@ -97,6 +97,17 @@ function extractAmount(e: AssinyEvent): number {
   return Number(n) / 100;
 }
 
+/**
+ * Receita líquida do produtor (centavos → reais). Usa offer.amount_client (líquido
+ * do main, sem taxa Assiny). Sem ele, undefined → dashboard cai no fallback (bruto).
+ */
+function extractNet(e: AssinyEvent): number | undefined {
+  const raw = e.data.offer?.amount_client;
+  if (raw == null) return undefined;
+  const n = typeof raw === "string" ? Number(raw) : raw;
+  return Number.isFinite(n) ? Number(n) / 100 : undefined;
+}
+
 // Conforme doc da Assiny, transaction/metadata/client ficam dentro de data.
 // Eventos de teste antigos vinham top-level. Lemos dos dois com fallback.
 function txOf(event: AssinyEvent) {
@@ -235,6 +246,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
       phone: client.phone ?? undefined,
     },
     amount: extractAmount(event),
+    netAmount: extractNet(event),
     status: mapPurchaseStatus(eventKind),
     utm,
     affiliateId,
@@ -271,6 +283,12 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
         bump.amount_with_tax ?? bump.amount_client ?? bump.product_price ?? 0;
       const bumpAmount =
         (typeof bumpRaw === "string" ? Number(bumpRaw) : bumpRaw) / 100;
+      // Líquido do bump (sem taxa) = amount_client. Sem ele → fallback (bruto).
+      const bumpNetRaw = bump.amount_client;
+      const bumpNet =
+        bumpNetRaw != null && Number.isFinite(Number(bumpNetRaw))
+          ? Number(bumpNetRaw) / 100
+          : undefined;
 
       const bumpNormalized: NormalizedPurchase = {
         gateway: "assiny",
@@ -292,6 +310,7 @@ export async function handleAssinyEvent(hub: SupabaseClient, event: AssinyEvent)
           phone: client.phone ?? undefined,
         },
         amount: Number.isFinite(bumpAmount) ? bumpAmount : 0,
+        netAmount: bumpNet,
         status: mapPurchaseStatus(eventKind),
         utm,
         affiliateId,

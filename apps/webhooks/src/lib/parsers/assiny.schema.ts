@@ -68,6 +68,7 @@ const assinyOfferSchema = z
     id: z.union([z.string(), z.number()]).transform(String),
     name: z.string().nullish(),
     amount: z.union([z.string(), z.number()]).nullish(),
+    amount_client: z.union([z.string(), z.number()]).nullish(), // líquido do produtor (sem taxa)
     recurrence: z.string().nullish(),
     type: z.string().nullish(),
     product: z
@@ -97,6 +98,7 @@ const assinyTransactionSchema = z
   .object({
     id: z.union([z.string(), z.number()]).transform(String).nullish(),
     amount: z.union([z.string(), z.number()]).nullish(),
+    net_amount: z.union([z.string(), z.number()]).nullish(), // líquido (sem taxa Assiny)
     status: z.string().nullish(),
     payment_type: z.string().nullish(),
     cycle: z.number().nullish(),

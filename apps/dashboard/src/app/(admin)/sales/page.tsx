@@ -14,6 +14,7 @@ import {
 interface SaleRow {
   id: string;
   amount: number;
+  net_amount: number | null;
   status: string;
   gateway: string;
   gateway_event_id: string;
@@ -125,7 +126,7 @@ async function listSales(filters: {
   let query = sb
     .from("purchases")
     .select(
-      `id, amount, status, gateway, gateway_event_id, created_at,
+      `id, amount, net_amount, status, gateway, gateway_event_id, created_at,
        payment_method, gateway_offer_id, gateway_offer_name, gateway_funnel_name,
        utm_source, utm_medium, utm_campaign, utm_content, utm_term, affiliate_id,
        customers(id, email, name, phone),
@@ -186,8 +187,10 @@ export default async function Page({
     size,
   });
 
-  const totalPaid = sales.filter((s) => s.status === "paid").reduce((sum, s) => sum + Number(s.amount), 0);
-  const totalRefunded = sales.filter((s) => s.status === "refunded").reduce((sum, s) => sum + Number(s.amount), 0);
+  // Receita = líquido real do produtor (net_amount; fallback valor cheio)
+  const netOf = (s: SaleRow) => (s.net_amount != null ? Number(s.net_amount) : Number(s.amount));
+  const totalPaid = sales.filter((s) => s.status === "paid").reduce((sum, s) => sum + netOf(s), 0);
+  const totalRefunded = sales.filter((s) => s.status === "refunded").reduce((sum, s) => sum + netOf(s), 0);
 
   return (
     <>
@@ -322,7 +325,10 @@ export default async function Page({
                           )}
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums">
-                          <Hideable kind="money">{fmtMoney(s.amount)}</Hideable>
+                          <Hideable kind="money">{fmtMoney(netOf(s))}</Hideable>
+                          {s.net_amount != null && Number(s.net_amount) !== Number(s.amount) && (
+                            <div className="text-2xs text-muted line-through">{fmtMoney(Number(s.amount))}</div>
+                          )}
                         </td>
                         <td className="px-4 py-2.5">
                           <span className="chip">

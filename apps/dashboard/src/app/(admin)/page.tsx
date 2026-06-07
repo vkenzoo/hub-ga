@@ -122,7 +122,7 @@ async function getOverview(period: Period, from?: string, to?: string) {
     sb.from("access_grants").select("*", { count: "exact", head: true }),
     sb
       .from("purchases")
-      .select("amount, subscription_cycle, created_at")
+      .select("amount, net_amount, subscription_cycle, created_at")
       .eq("status", "paid")
       .limit(50000),
     newStudentsQuery ?? Promise.resolve({ count: null as number | null }),
@@ -140,9 +140,13 @@ async function getOverview(period: Period, from?: string, to?: string) {
 
   const paid = (paidRows ?? []) as Array<{
     amount: number;
+    net_amount: number | null;
     subscription_cycle: number | null;
     created_at: string;
   }>;
+  // Receita = líquido real do produtor (net_amount; fallback valor cheio)
+  const netOf = (p: { net_amount: number | null; amount: number }) =>
+    p.net_amount != null ? Number(p.net_amount) : Number(p.amount);
 
   // Filtro por período em JS sobre os mesmos dados
   const inPeriod = paid.filter((p) => {
@@ -151,11 +155,11 @@ async function getOverview(period: Period, from?: string, to?: string) {
     return true;
   });
 
-  const totalRevenue = paid.reduce((s, p) => s + Number(p.amount), 0);
-  const periodRevenue = inPeriod.reduce((s, p) => s + Number(p.amount), 0);
+  const totalRevenue = paid.reduce((s, p) => s + netOf(p), 0);
+  const periodRevenue = inPeriod.reduce((s, p) => s + netOf(p), 0);
   const periodRenewalRevenue = inPeriod
     .filter((p) => (p.subscription_cycle ?? 1) > 1)
-    .reduce((s, p) => s + Number(p.amount), 0);
+    .reduce((s, p) => s + netOf(p), 0);
   const periodSalesCount = inPeriod.length;
 
   const newStudents = newStudentsResult.count ?? customersCount ?? 0;

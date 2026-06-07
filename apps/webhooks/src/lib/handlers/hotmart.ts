@@ -130,6 +130,12 @@ export async function handleHotmartEvent(hub: SupabaseClient, event: HotmartEven
   const affiliateCode = d.affiliates?.[0]?.affiliate_code;
   const affiliateName = d.affiliates?.[0]?.name;
 
+  // Receita líquida real = comissão do PRODUCER (já desconta Hotmart + afiliado).
+  // Sem o array commissions, cai no fallback (amount cheio) lá no dashboard.
+  const producerCommission = d.commissions?.find(
+    (c) => (c.source ?? "").toUpperCase() === "PRODUCER",
+  )?.value;
+
   const purchaseAny = d.purchase as Record<string, unknown>;
   const paymentObj = purchaseAny.payment as { type?: string; method?: string } | undefined;
 
@@ -170,6 +176,9 @@ export async function handleHotmartEvent(hub: SupabaseClient, event: HotmartEven
     },
     affiliateId: affiliateCode,
     affiliateName: affiliateName,
+    netAmount: typeof producerCommission === "number" && Number.isFinite(producerCommission)
+      ? producerCommission
+      : undefined,
     subscription: d.subscription?.subscriber?.code
       ? {
           gatewaySubscriptionId: d.subscription.subscriber.code,

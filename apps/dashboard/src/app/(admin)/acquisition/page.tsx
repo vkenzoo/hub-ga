@@ -6,10 +6,10 @@ import { PageBody, PageHeader, StatCard } from "@/components/page";
 import { Hideable } from "@/components/hideable";
 import { RevenueChart, PaymentMethodChart, PaymentPie } from "./charts";
 
-// Taxa de gateway aplicada sobre faturamento bruto (fórmula da Margem de Contribuição)
-const GATEWAY_FEE_RATE = 0.025;
 // Imposto sobre o investimento em mídia paga (Meta). Adicionado ao spend
 // pra calcular o investimento total e descontado da margem de contribuição.
+// Obs: a taxa de gateway NÃO entra mais aqui — a receita já é líquida (net_amount),
+// então o gateway/Hotmart + comissão de afiliado já estão descontados por venda.
 const META_TAX_RATE = 0.125;
 
 type Period = "today" | "yesterday" | "7d" | "30d" | "month" | "all" | "custom";
@@ -124,7 +124,7 @@ export default async function Page({
   let q = sb
     .from("purchases")
     .select(
-      "id, amount, status, payment_method, customer_id, product_id, utm_source, created_at, products!inner(name, role)",
+      "id, amount, net_amount, status, payment_method, customer_id, product_id, utm_source, created_at, products!inner(name, role)",
     )
     .eq("products.role", "acquisition")
     .in("status", ["paid", "refunded"])
@@ -150,6 +150,7 @@ export default async function Page({
   interface Row {
     id: string;
     amount: number;
+    net_amount: number | null;
     status: string;
     payment_method: string | null;
     customer_id: string;
@@ -159,13 +160,18 @@ export default async function Page({
     products: { name: string; role: string } | null;
   }
   const purchases = (rows ?? []) as unknown as Row[];
+  // Receita real do produtor: líquido quando disponível, senão valor cheio.
+  const netOf = (p: { net_amount: number | null; amount: number }) =>
+    p.net_amount != null ? Number(p.net_amount) : Number(p.amount);
 
   // ── Agregações de KPI ────────────────────────────────────
   const paid = purchases.filter((p) => p.status === "paid");
   const refunded = purchases.filter((p) => p.status === "refunded");
 
-  const receita = paid.reduce((s, p) => s + Number(p.amount), 0);
-  const reembolsos = refunded.reduce((s, p) => s + Number(p.amount), 0);
+  // Receita = LÍQUIDO real do produtor (já desconta gateway/Hotmart + afiliado).
+  // Por isso NÃO subtraímos taxa de gateway de novo (seria dupla contagem).
+  const receita = paid.reduce((s, p) => s + netOf(p), 0);
+  const reembolsos = refunded.reduce((s, p) => s + netOf(p), 0);
   // Meta ads insights são armazenados em centavos → divide por 100 pra alinhar com purchases (real)
   const investimentoCents = (metaRows ?? []).reduce(
     (s, r) => s + Number((r as { spend_cents: number }).spend_cents ?? 0),
@@ -176,16 +182,17 @@ export default async function Page({
   // Investimento "total" = spend Meta + imposto. Esse é o número que aparece
   // no card "Investimento" e que entra em CPA + ROI (não ROAS).
   const investimento = spendMeta + impostoMeta;
-  const taxas = receita * GATEWAY_FEE_RATE;
-  const gastosTotais = spendMeta + impostoMeta + taxas;
-  const margem = receita - taxas - reembolsos - investimento;
+  // Gastos totais sobre a receita líquida = só spend + imposto Meta (o gateway já
+  // está embutido no líquido de cada venda).
+  const gastosTotais = spendMeta + impostoMeta;
+  const margem = receita - reembolsos - investimento;
   const margemPct = receita > 0 ? (margem / receita) * 100 : 0;
   const taxaReembolso = receita > 0 ? (reembolsos / receita) * 100 : 0;
   const compradores = new Set(paid.map((p) => p.customer_id)).size;
   const tmf = compradores > 0 ? receita / compradores : 0;
-  // ROAS pure = Receita ÷ Spend Meta (sem imposto/taxa) — métrica clássica de mídia
+  // ROAS = Receita líquida ÷ Spend Meta
   const roas = spendMeta > 0 ? receita / spendMeta : null;
-  // ROI = Receita ÷ Gastos totais (spend + imposto + gateway) — visão de negócio
+  // ROI = Receita líquida ÷ Gastos totais (spend + imposto Meta)
   const roi = gastosTotais > 0 ? receita / gastosTotais : null;
   const cpa = compradores > 0 && investimento > 0 ? investimento / compradores : null;
 
@@ -218,15 +225,16 @@ export default async function Page({
   for (const p of paid) {
     const day = isoDayBRT(p.created_at);
     const row = dailyMap.get(day) ?? emptyDay();
-    row.receita += Number(p.amount);
+    const v = netOf(p);
+    row.receita += v;
     const kind = classifyPayment(p.payment_method);
-    row[kind] += Number(p.amount);
+    row[kind] += v;
     dailyMap.set(day, row);
   }
   for (const p of refunded) {
     const day = isoDayBRT(p.created_at);
     const row = dailyMap.get(day) ?? emptyDay();
-    row.reembolsos += Number(p.amount);
+    row.reembolsos += netOf(p);
     dailyMap.set(day, row);
   }
   // Investimento Meta (acquisition) por dia — date_start é DATE (YYYY-MM-DD direto)
@@ -237,11 +245,11 @@ export default async function Page({
     dailyMap.set(day, row);
   }
   const revenueSeries = [...dailyMap.entries()].sort().map(([date, r]) => {
-    const taxas = r.receita * GATEWAY_FEE_RATE;
     const spendDay = r.investimento;                 // só spend Meta puro
     const investimentoTotal = spendDay * (1 + META_TAX_RATE); // spend + imposto
-    const margem = r.receita - taxas - r.reembolsos - investimentoTotal;
-    // ROAS no chart = Receita ÷ Spend (sem imposto/taxa), igual ao card.
+    // Receita já é líquida → margem = líquido - reembolsos - (spend + imposto).
+    const margem = r.receita - r.reembolsos - investimentoTotal;
+    // ROAS no chart = Receita líquida ÷ Spend, igual ao card.
     const roas = spendDay > 0 ? r.receita / spendDay : null;
     return {
       date,
@@ -266,7 +274,7 @@ export default async function Page({
     const k = p.product_id ?? "?";
     const name = p.products?.name ?? "(removido)";
     const row = byProduct.get(k) ?? { name, receita: 0, reembolsos: 0, vendas: 0 };
-    row.receita += Number(p.amount);
+    row.receita += netOf(p);
     row.vendas += 1;
     byProduct.set(k, row);
   }
@@ -274,17 +282,17 @@ export default async function Page({
     const k = p.product_id ?? "?";
     const name = p.products?.name ?? "(removido)";
     const row = byProduct.get(k) ?? { name, receita: 0, reembolsos: 0, vendas: 0 };
-    row.reembolsos += Number(p.amount);
+    row.reembolsos += netOf(p);
     byProduct.set(k, row);
   }
   const productRows = [...byProduct.values()].sort((a, b) => b.receita - a.receita);
 
-  // ── Payment method totals (pra pie) ──────────────────────
+  // ── Payment method totals (pra pie) — sobre receita líquida ──
   const paymentTotals = {
-    pix: paid.filter((p) => classifyPayment(p.payment_method) === "pix").reduce((s, p) => s + Number(p.amount), 0),
-    cartao: paid.filter((p) => classifyPayment(p.payment_method) === "cartao").reduce((s, p) => s + Number(p.amount), 0),
-    boleto: paid.filter((p) => classifyPayment(p.payment_method) === "boleto").reduce((s, p) => s + Number(p.amount), 0),
-    outros: paid.filter((p) => classifyPayment(p.payment_method) === "outros").reduce((s, p) => s + Number(p.amount), 0),
+    pix: paid.filter((p) => classifyPayment(p.payment_method) === "pix").reduce((s, p) => s + netOf(p), 0),
+    cartao: paid.filter((p) => classifyPayment(p.payment_method) === "cartao").reduce((s, p) => s + netOf(p), 0),
+    boleto: paid.filter((p) => classifyPayment(p.payment_method) === "boleto").reduce((s, p) => s + netOf(p), 0),
+    outros: paid.filter((p) => classifyPayment(p.payment_method) === "outros").reduce((s, p) => s + netOf(p), 0),
   };
   const paymentPieData = [
     { name: "PIX", value: paymentTotals.pix, color: "#22c55e" },
@@ -369,14 +377,14 @@ export default async function Page({
 
         {/* KPIs principais */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="Faturamento" value={<Hideable kind="money">{fmtMoney(receita)}</Hideable>} tone="accent" hint="Vendas pagas" />
+          <StatCard label="Faturamento líquido" value={<Hideable kind="money">{fmtMoney(receita)}</Hideable>} tone="accent" hint="Sua comissão (já s/ gateway + afiliado)" />
           <StatCard label="Reembolsos" value={<Hideable kind="money">{fmtMoney(reembolsos)}</Hideable>} hint={<Hideable kind="count">{fmtPct(taxaReembolso) + " do faturamento"}</Hideable>} />
           <StatCard
             label="Margem de contribuição"
             value={<Hideable kind="money">{fmtMoney(margem)}</Hideable>}
             hint={
               <Hideable kind="count">
-                {`${fmtPct(margemPct)} · gateway ${(GATEWAY_FEE_RATE * 100).toFixed(1)}% · Meta ${(META_TAX_RATE * 100).toFixed(1)}%`}
+                {`${fmtPct(margemPct)} · líquido − reembolso − Meta ${(META_TAX_RATE * 100).toFixed(1)}%`}
               </Hideable>
             }
           />
@@ -410,7 +418,7 @@ export default async function Page({
           <StatCard
             label="ROI"
             value={roi != null ? <Hideable kind="count">{roi.toFixed(2).replace(".", ",")}</Hideable> : "—"}
-            hint="Receita ÷ (Spend + Imposto + Gateway)"
+            hint="Líquido ÷ (Spend + Imposto)"
           />
           <StatCard
             label="CPA"

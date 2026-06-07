@@ -161,7 +161,7 @@ export default async function Page({
     .from("utm_sales_attribution")
     .select(`
       purchase_id, campaign_id, adset_id, ad_id,
-      purchases!inner(amount, status, created_at, customer_id)
+      purchases!inner(amount, net_amount, status, created_at, customer_id)
     `)
     .eq("matched", true)
     .eq("is_active", true)
@@ -178,20 +178,21 @@ export default async function Page({
     adset_id: string | null;
     ad_id: string | null;
     purchases:
-      | { amount: number; status: string; created_at: string; customer_id: string }
-      | Array<{ amount: number; status: string; created_at: string; customer_id: string }>;
+      | { amount: number; net_amount: number | null; status: string; created_at: string; customer_id: string }
+      | Array<{ amount: number; net_amount: number | null; status: string; created_at: string; customer_id: string }>;
   }>;
 
   // Mapas de receita + buyers únicos por nível.
   // sales_count = nº de customer_ids distintos (estilo Meta Ads Manager: 4 compras do mesmo email = 1 venda).
-  // revenue_cents continua sendo a soma de todas as compras (não dedupada — dinheiro é dinheiro).
+  // revenue_cents = receita LÍQUIDA real (net_amount; fallback amount cheio).
   interface RevAgg { revenue_cents: number; buyers: Set<string> }
   const aggCampaign: Record<string, RevAgg> = {};
   const aggAdset: Record<string, RevAgg> = {};
   const aggAd: Record<string, RevAgg> = {};
   for (const a of attrs) {
     const p = Array.isArray(a.purchases) ? a.purchases[0] : a.purchases;
-    const amountCents = Math.round(Number(p?.amount ?? 0) * 100);
+    const netReais = p?.net_amount != null ? Number(p.net_amount) : Number(p?.amount ?? 0);
+    const amountCents = Math.round(netReais * 100);
     const customerId = p?.customer_id;
     if (a.campaign_id) {
       const r = aggCampaign[a.campaign_id] ?? { revenue_cents: 0, buyers: new Set<string>() };

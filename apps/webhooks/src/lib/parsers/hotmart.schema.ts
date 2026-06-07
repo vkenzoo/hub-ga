@@ -58,6 +58,19 @@ export const hotmartEventSchema = z
               .passthrough(),
           )
           .optional(),
+        // Quebra da venda por parte: MARKETPLACE (taxa Hotmart), PRODUCER (você),
+        // AFFILIATE, COPRODUCER. A SUA receita real é o value do source=PRODUCER.
+        commissions: z
+          .array(
+            z
+              .object({
+                value: z.union([z.string(), z.number()]).transform((v) => Number(v)).optional(),
+                source: z.string().optional(),
+                currency_value: z.string().optional(),
+              })
+              .passthrough(),
+          )
+          .optional(),
         subscription: z
           .object({
             subscriber: z.object({ code: z.string().optional() }).passthrough().optional(),

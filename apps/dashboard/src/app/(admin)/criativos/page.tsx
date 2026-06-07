@@ -115,7 +115,7 @@ export default async function Page({
   // Atribuições do período (receita + compradores únicos por ad_id)
   let attrQ = sb
     .from("utm_sales_attribution")
-    .select("ad_id, purchases!inner(amount, status, created_at, customer_id)")
+    .select("ad_id, purchases!inner(amount, net_amount, status, created_at, customer_id)")
     .eq("matched", true)
     .eq("is_active", true)
     .eq("purchases.status", "paid")
@@ -129,8 +129,8 @@ export default async function Page({
   const attrs = (attrRaw ?? []) as unknown as Array<{
     ad_id: string | null;
     purchases:
-      | { amount: number; customer_id: string }
-      | Array<{ amount: number; customer_id: string }>;
+      | { amount: number; net_amount: number | null; customer_id: string }
+      | Array<{ amount: number; net_amount: number | null; customer_id: string }>;
   }>;
 
   // ad_id → ad_name (do período). Usado pra reagrupar receita por nome.
@@ -190,8 +190,9 @@ export default async function Page({
     if (!name) continue; // ad_id sem insight no período (sem spend) → ignora
     const p = Array.isArray(at.purchases) ? at.purchases[0] : at.purchases;
     if (!p) continue;
+    const netReais = p.net_amount != null ? Number(p.net_amount) : Number(p.amount ?? 0);
     const a = byName.get(name) ?? emptyAgg();
-    a.revenue_cents += Math.round(Number(p.amount ?? 0) * 100);
+    a.revenue_cents += Math.round(netReais * 100);
     if (p.customer_id) a.buyers.add(p.customer_id);
     byName.set(name, a);
   }

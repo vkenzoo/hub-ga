@@ -65,6 +65,7 @@ function fmtDateTime(iso: string): string {
 interface Row {
   id: string;
   amount: number;
+  net_amount: number | null;
   status: string;
   affiliate_id: string | null;
   affiliate_name: string | null;
@@ -72,6 +73,11 @@ interface Row {
   created_at: string;
   customers: { id: string; name: string | null; email: string } | null;
   products: { name: string } | null;
+}
+
+/** Receita real do produtor: líquido quando disponível, senão valor cheio. */
+function netOf(r: { net_amount: number | null; amount: number }): number {
+  return r.net_amount != null ? Number(r.net_amount) : Number(r.amount);
 }
 
 export default async function Page({
@@ -95,7 +101,7 @@ export default async function Page({
   let q = sb
     .from("purchases")
     .select(
-      "id, amount, status, affiliate_id, affiliate_name, customer_id, created_at, customers(id, name, email), products(name)",
+      "id, amount, net_amount, status, affiliate_id, affiliate_name, customer_id, created_at, customers(id, name, email), products(name)",
     )
     .not("affiliate_id", "is", null)
     .in("status", ["paid", "refunded"])
@@ -131,19 +137,19 @@ export default async function Page({
   };
   for (const r of paid) {
     const a = get(r.affiliate_id!, r.affiliate_name);
-    a.receita += Number(r.amount);
+    a.receita += netOf(r);
     a.vendas += 1;
     a.clientes.add(r.customer_id);
   }
   for (const r of refunded) {
     const a = get(r.affiliate_id!, r.affiliate_name);
-    a.reembolsos += Number(r.amount);
+    a.reembolsos += netOf(r);
   }
   const ranking = [...byAff.values()].sort((a, b) => b.receita - a.receita);
 
   // KPIs
-  const totalReceita = paid.reduce((s, r) => s + Number(r.amount), 0);
-  const totalReembolsos = refunded.reduce((s, r) => s + Number(r.amount), 0);
+  const totalReceita = paid.reduce((s, r) => s + netOf(r), 0);
+  const totalReembolsos = refunded.reduce((s, r) => s + netOf(r), 0);
   const totalVendas = paid.length;
   const ticketMedio = totalVendas > 0 ? totalReceita / totalVendas : 0;
 
@@ -274,7 +280,12 @@ export default async function Page({
                       </td>
                       <td className="px-4 py-2.5 text-xs"><Hideable kind="text">{r.affiliate_name ?? r.affiliate_id}</Hideable></td>
                       <td className="px-4 py-2.5 text-xs text-text2">{r.products?.name ?? "—"}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums"><Hideable kind="money">{fmtMoney(Number(r.amount))}</Hideable></td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">
+                        <Hideable kind="money">{fmtMoney(netOf(r))}</Hideable>
+                        {r.net_amount != null && Number(r.net_amount) !== Number(r.amount) && (
+                          <div className="text-2xs text-muted line-through">{fmtMoney(Number(r.amount))}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5">
                         <span className="chip">
                           <span className={`dot ${r.status === "paid" ? "bg-accent" : "bg-warn"}`} />
