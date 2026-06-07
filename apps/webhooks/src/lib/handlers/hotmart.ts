@@ -128,6 +128,7 @@ export async function handleHotmartEvent(hub: SupabaseClient, event: HotmartEven
 
   const tracking = d.purchase.tracking ?? {};
   const affiliateCode = d.affiliates?.[0]?.affiliate_code;
+  const affiliateName = d.affiliates?.[0]?.name;
 
   const purchaseAny = d.purchase as Record<string, unknown>;
   const paymentObj = purchaseAny.payment as { type?: string; method?: string } | undefined;
@@ -168,6 +169,7 @@ export async function handleHotmartEvent(hub: SupabaseClient, event: HotmartEven
       campaign: tracking.external_code,
     },
     affiliateId: affiliateCode,
+    affiliateName: affiliateName,
     subscription: d.subscription?.subscriber?.code
       ? {
           gatewaySubscriptionId: d.subscription.subscriber.code,

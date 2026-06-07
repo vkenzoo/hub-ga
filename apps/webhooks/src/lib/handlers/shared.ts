@@ -58,6 +58,7 @@ export interface NormalizedPurchase {
     term?: string;
   };
   affiliateId?: string;
+  affiliateName?: string;
   /**
    * Timestamp original da transação (do payload do gateway). Quando ausente,
    * usa NOW() (padrão). Importante pra replays — evita marcar venda antiga
@@ -322,6 +323,7 @@ export async function recordPurchase(
     utm_content: p.utm?.content ?? null,
     utm_term: p.utm?.term ?? null,
     affiliate_id: p.affiliateId ?? null,
+    affiliate_name: p.affiliateName ?? null,
     payment_method: p.paymentMethod ?? null,
     gateway_offer_id: p.gatewayOfferId ?? null,
     gateway_offer_name: p.gatewayOfferName ?? null,
