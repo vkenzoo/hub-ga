@@ -124,8 +124,8 @@ function parseMonths(raw: string | undefined): Array<{ key: string; year: number
   for (const k of keys) {
     if (seen.has(k)) continue;
     seen.add(k);
-    const [y, m] = k.split("-").map(Number);
-    out.push({ key: k, year: y, month: m });
+    const parts = k.split("-");
+    out.push({ key: k, year: Number(parts[0]), month: Number(parts[1]) });
   }
   return out;
 }
@@ -143,16 +143,20 @@ export default async function Page({
 
   const sb = createSupabaseAdmin();
   const aggs = await Promise.all(selected.map((s) => aggregateMonth(sb, s.year, s.month)));
-  const cols = selected.map((s, i) => ({
-    key: s.key,
-    label: `${MONTH_NAMES[s.month - 1]} ${s.year}`,
-    metrics: computeMetrics(aggs[i].total),
-  }));
+  const cols = aggs.map((agg, i) => {
+    const s = selected[i]!;
+    return {
+      key: s.key,
+      label: `${MONTH_NAMES[s.month - 1]} ${s.year}`,
+      metrics: computeMetrics(agg.total),
+    };
+  });
 
   // Chips: últimos 12 meses pra (de)selecionar
   const allMonths = recentMonths(12).map((k) => {
-    const [y, m] = k.split("-").map(Number);
-    return { key: k, label: `${MONTH_SHORT[m - 1]} ${String(y).slice(2)}` };
+    const parts = k.split("-");
+    const m = Number(parts[1]);
+    return { key: k, label: `${MONTH_SHORT[m - 1]} ${String(Number(parts[0])).slice(2)}` };
   });
 
   function toggleHref(key: string): string {
