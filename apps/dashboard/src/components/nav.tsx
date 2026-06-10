@@ -71,6 +71,9 @@ const I = {
   afiliados: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
   ),
+  funnel: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
+  ),
 };
 
 type Section =
@@ -88,7 +91,8 @@ type Section =
   | "surveys"
   | "recovery"
   | "refunds"
-  | "meta_ads";
+  | "meta_ads"
+  | "funnel";
 
 interface ItemWithRole extends Item {
   section?: Section;
@@ -100,6 +104,7 @@ const ITEMS: ItemWithRole[] = [
   { href: "/acquisition", label: "Aquisição", icon: I.acquisition, section: "acquisition" },
   { href: "/meta-ads", label: "Meta Ads", icon: I.metaAds, section: "meta_ads" },
   { href: "/criativos", label: "Criativos", icon: I.criativos, section: "meta_ads" },
+  { href: "/funil", label: "KPI Funil", icon: I.funnel, section: "funnel" },
   { href: "/surveys", label: "Pesquisa", icon: I.surveys, section: "surveys" },
   { href: "/sales", label: "Vendas", icon: I.sales, section: "sales" },
   { href: "/afiliados", label: "Afiliados", icon: I.afiliados, section: "sales" },
