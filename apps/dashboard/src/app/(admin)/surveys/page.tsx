@@ -19,7 +19,41 @@ interface SurveyRow {
   qualification: string | null;
   customer_id: string | null;
   received_at: string;
+  answers: Record<string, unknown> | null;
   customers: { id: string; email: string; name: string | null } | null;
+}
+
+/** Normaliza texto: minúsculo, sem acento, espaços colapsados. */
+function normalizeTxt(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // remove acentos
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Padrões da pergunta "você já conhecia o Pedro?".
+// Quente = já conhece; Fria = acabou de conhecer.
+const WARM_PATTERNS = [
+  "ja conheco", "ja conhecia", "conheco o pedro", "conhecem o pedro",
+  "ja acompanho", "ja sigo", "sigo o pedro", "ja sou aluno", "ja conhe",
+];
+const COLD_PATTERNS = [
+  "acabei de conhecer", "acabei de conhece", "nao conhecia", "nao conheco",
+  "conheci agora", "agora que conheci", "primeira vez", "nao conhe",
+];
+
+/** Classifica um respondente em quente/fria pela resposta sobre conhecer o Pedro. */
+function temperature(answers: Record<string, unknown> | null): "quente" | "fria" | null {
+  if (!answers) return null;
+  for (const v of Object.values(answers)) {
+    if (typeof v !== "string") continue;
+    const n = normalizeTxt(v);
+    if (WARM_PATTERNS.some((w) => n.includes(w))) return "quente";
+    if (COLD_PATTERNS.some((c) => n.includes(c))) return "fria";
+  }
+  return null;
 }
 
 const QUAL_STYLES: Record<string, { dot: string; text: string; label: string }> = {
@@ -61,7 +95,7 @@ export default async function Page({
   let query = sb
     .from("survey_responses")
     .select(
-      "id, respondi_respondent_id, form_id, form_name, email, phone, score, utm_source, utm_campaign, qualification, customer_id, received_at, customers(id, email, name)",
+      "id, respondi_respondent_id, form_id, form_name, email, phone, score, utm_source, utm_campaign, qualification, customer_id, received_at, answers, customers(id, email, name)",
     )
     .order("received_at", { ascending: false })
     .limit(500);
@@ -96,9 +130,23 @@ export default async function Page({
 
   // Stats agregadas
   const totalResponses = rows.length;
-  const uniqueByContact = new Set(
-    rows.map((r) => r.email ?? r.phone ?? r.respondi_respondent_id),
-  ).size;
+  const contactKey = (r: SurveyRow) => r.email ?? r.phone ?? r.respondi_respondent_id;
+  const uniqueByContact = new Set(rows.map(contactKey)).size;
+
+  // Temperatura: 1 pessoa por contato (resposta mais recente, rows já vem desc).
+  // Quente = já conhece o Pedro; Fria = acabou de conhecer.
+  const tempByContact = new Map<string, "quente" | "fria" | null>();
+  for (const r of rows) {
+    const k = contactKey(r);
+    if (tempByContact.has(k)) continue; // mantém a resposta mais recente
+    tempByContact.set(k, temperature(r.answers));
+  }
+  let qtdQuentes = 0;
+  let qtdFrias = 0;
+  for (const t of tempByContact.values()) {
+    if (t === "quente") qtdQuentes++;
+    else if (t === "fria") qtdFrias++;
+  }
 
   // Dedup compradores por customer_id — múltiplas respostas do mesmo cliente
   // contam como 1 resposta válida + 1 lead (a mais recente). rows já vem
@@ -222,6 +270,21 @@ export default async function Page({
             label="Não classificados"
             value={<Hideable kind="count">{String(byQual._none ?? 0)}</Hideable>}
             hint="Compradores sem regra casando"
+          />
+        </section>
+
+        {/* Temperatura — baseado na resposta "já conhece o Pedro?" */}
+        <section className="grid grid-cols-2 gap-3">
+          <StatCard
+            label="Pessoas Quentes"
+            value={<Hideable kind="count">{String(qtdQuentes)}</Hideable>}
+            tone="accent"
+            hint="Já conhecem o Pedro"
+          />
+          <StatCard
+            label="Pessoas Frias"
+            value={<Hideable kind="count">{String(qtdFrias)}</Hideable>}
+            hint="Acabaram de conhecer"
           />
         </section>
 
