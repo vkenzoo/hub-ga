@@ -478,7 +478,8 @@ export default async function Page({
         </section>
 
         {/* Lista */}
-        <section className="card overflow-hidden">
+        {/* sem overflow-hidden: o dropdown "Editar acesso" (absolute) seria cortado */}
+        <section className="card">
           <header className="px-4 py-3 border-b border-line">
             <h2 className="text-sm font-medium">{rows.length} {rows.length === 1 ? "pessoa" : "pessoas"}</h2>
           </header>
