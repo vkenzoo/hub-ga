@@ -11,19 +11,30 @@ interface FormInfo {
 }
 
 interface RuleFormProps {
-  questionMap: Record<string, string[]>;  // pergunta → array de respostas únicas
-  forms: FormInfo[];                       // forms únicos vistos (id + nome)
+  questionMap: Record<string, string[]>;                 // GLOBAL: pergunta → respostas (Geral)
+  byForm: Record<string, Record<string, string[]>>;      // form → pergunta → respostas
+  forms: FormInfo[];                                      // forms únicos vistos (id + nome)
   createAction: (formData: FormData) => Promise<void>;
 }
 
-export function RuleForm({ questionMap, forms, createAction }: RuleFormProps) {
-  const questions = Object.keys(questionMap);
+export function RuleForm({ questionMap, byForm, forms, createAction }: RuleFormProps) {
+  // O FORM escolhido dirige tudo: "" = Geral (união de todos os forms).
+  const [selectedForm, setSelectedForm] = useState<string>("");
+  const activeMap = selectedForm ? (byForm[selectedForm] ?? {}) : questionMap;
+  const questions = Object.keys(activeMap);
   const [selectedQuestion, setSelectedQuestion] = useState<string>(questions[0] ?? "");
   const [matchType, setMatchType] = useState<MatchType>("equals");
-  const availableAnswers = questionMap[selectedQuestion] ?? [];
+  const availableAnswers = activeMap[selectedQuestion] ?? [];
+
+  // Ao trocar o form, reseta a pergunta pra primeira daquele form.
+  function handleFormChange(formId: string) {
+    setSelectedForm(formId);
+    const nextMap = formId ? (byForm[formId] ?? {}) : questionMap;
+    const firstQ = Object.keys(nextMap)[0] ?? "";
+    setSelectedQuestion(firstQ);
+  }
 
   const hasData = questions.length > 0;
-  const isFreeText = matchType === "regex" || matchType === "contains" || matchType === "starts_with";
 
   return (
     <form action={createAction} className="card">
@@ -40,6 +51,26 @@ export function RuleForm({ questionMap, forms, createAction }: RuleFormProps) {
             Nenhuma resposta recebida ainda. Configure o webhook em <strong>Setup</strong> e dispare uma resposta de teste pra popular as opções aqui.
           </div>
         )}
+
+        <label className="block">
+          <span className="label block mb-1.5">Form</span>
+          <select
+            name="form_id"
+            value={selectedForm}
+            onChange={(e) => handleFormChange(e.target.value)}
+            className="input"
+          >
+            <option value="">Geral (todos os forms)</option>
+            {forms.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-2xs text-muted mt-1">
+            Escolha o formulário pra ver só as perguntas e respostas dele.
+          </p>
+        </label>
 
         <label className="block">
           <span className="label block mb-1.5">Pergunta</span>
@@ -89,6 +120,7 @@ export function RuleForm({ questionMap, forms, createAction }: RuleFormProps) {
             </span>
             {matchType === "equals" ? (
               <select
+                key={`${selectedForm}|${selectedQuestion}`}
                 name="answer_pattern"
                 required
                 className="input"
@@ -136,7 +168,7 @@ export function RuleForm({ questionMap, forms, createAction }: RuleFormProps) {
           </label>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-[180px_180px_1fr] gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-[180px_1fr] gap-3">
           <label className="block">
             <span className="label block mb-1.5">Classificação</span>
             <select name="classification" defaultValue="a" className="input">
@@ -145,18 +177,6 @@ export function RuleForm({ questionMap, forms, createAction }: RuleFormProps) {
               <option value="c">Lead C</option>
               <option value="d">Lead D</option>
               <option value="e">Lead E</option>
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="label block mb-1.5">Form</span>
-            <select name="form_id" defaultValue="" className="input">
-              <option value="">Geral (todos os forms)</option>
-              {forms.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
             </select>
           </label>
 

@@ -128,9 +128,11 @@ async function deleteRule(formData: FormData) {
   const sb = createSupabaseAdmin();
 
   const id = String(formData.get("id") ?? "");
+  // Loga a regra INTEIRA antes de apagar — assim um delete acidental é 100%
+  // recuperável pelo audit_log (re-insert com os mesmos campos).
   const { data: before } = await sb
     .from("lead_qualification_rules")
-    .select("question_key, classification")
+    .select("*")
     .eq("id", id)
     .maybeSingle();
 
@@ -175,8 +177,10 @@ export default async function Page({
   ]);
   const rules = (rulesData ?? []) as RuleRow[];
 
-  // Constrói mapa de pergunta → respostas únicas (a partir das últimas 2000 respostas)
-  const questionMap: Record<string, Set<string>> = {};
+  // Mapa GLOBAL (pergunta → respostas) + mapa POR FORM (form → pergunta → respostas).
+  // O "por form" é o que faz o dropdown mostrar só as respostas do formulário escolhido.
+  const allSets: Record<string, Set<string>> = {};
+  const byFormSets: Record<string, Record<string, Set<string>>> = {};
   const formNameMap = new Map<string, string>();
   for (const r of (responsesData ?? []) as Array<{
     form_id: string;
@@ -189,14 +193,21 @@ export default async function Page({
     if (!r.answers) continue;
     for (const [q, a] of Object.entries(r.answers)) {
       if (typeof a !== "string" || !a.trim()) continue;
-      if (!questionMap[q]) questionMap[q] = new Set();
-      questionMap[q]!.add(a);
+      (allSets[q] ??= new Set()).add(a);
+      if (r.form_id) {
+        (byFormSets[r.form_id] ??= {});
+        (byFormSets[r.form_id]![q] ??= new Set()).add(a);
+      }
     }
   }
-  const sortedQuestionMap: Record<string, string[]> = {};
-  for (const q of Object.keys(questionMap).sort()) {
-    sortedQuestionMap[q] = [...questionMap[q]!].sort();
-  }
+  const sortMap = (m: Record<string, Set<string>>): Record<string, string[]> => {
+    const out: Record<string, string[]> = {};
+    for (const q of Object.keys(m).sort()) out[q] = [...m[q]!].sort();
+    return out;
+  };
+  const sortedQuestionMap = sortMap(allSets);
+  const byForm: Record<string, Record<string, string[]>> = {};
+  for (const [fid, qmap] of Object.entries(byFormSets)) byForm[fid] = sortMap(qmap);
   const forms = [...formNameMap.entries()]
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
@@ -235,6 +246,7 @@ export default async function Page({
         {/* Criar */}
         <RuleForm
           questionMap={sortedQuestionMap}
+          byForm={byForm}
           forms={forms}
           createAction={createRule}
         />
