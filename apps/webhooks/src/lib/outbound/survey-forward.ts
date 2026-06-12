@@ -12,6 +12,7 @@
  * O hub NÃO qualifica — só repassa email/phone/nome/UTMs/answers. O GHL qualifica.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { attemptDelivery } from "./deliveries";
 
 const SURVEY_APPLICATION_EVENT = "survey.application";
 
@@ -90,10 +91,21 @@ export async function enqueueSurveyForward(
     attempts: 0,
   }));
 
-  const { error: insErr } = await hub.from("outbound_deliveries").insert(rows);
+  const { data: inserted, error: insErr } = await hub
+    .from("outbound_deliveries")
+    .insert(rows)
+    .select("id, url, payload, event, attempts");
   if (insErr) {
     console.error("[survey-forward] insert deliveries failed:", insErr);
     return { enqueued: 0 };
   }
-  return { enqueued: rows.length };
+
+  // Entrega IMEDIATA (best-effort) — não espera o cron. Se falhar, fica pending
+  // e o cron tenta de novo com backoff. attemptDelivery nunca lança.
+  const created = (inserted ?? []) as Array<{
+    id: string; url: string; payload: unknown; event: string | null; attempts: number;
+  }>;
+  await Promise.all(created.map((d) => attemptDelivery(hub, d)));
+
+  return { enqueued: created.length };
 }

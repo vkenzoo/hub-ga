@@ -5,6 +5,7 @@ import { createSystemUser } from "@/lib/provisioning/create-system-user";
 import { logEvent } from "@/lib/logger";
 import { safeEqual } from "@/lib/hmac";
 import { dispatchOutboundWebhook, type OutboundEvent } from "@/lib/outbound/dispatch";
+import { attemptDelivery, type DeliveryRow } from "@/lib/outbound/deliveries";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -105,8 +106,8 @@ export async function GET(req: Request) {
 }
 
 /**
- * Pega outbound_deliveries pendentes, faz POST e atualiza status. Falha → retry
- * com backoff exponencial (run_after). Após MAX_JOB_ATTEMPTS → status='failed'.
+ * Pega outbound_deliveries pendentes e entrega cada uma (POST + retry/backoff).
+ * Reusa attemptDelivery (mesma lógica do envio inline no route do Respondi).
  */
 async function processOutboundDeliveries(
   hub: ReturnType<typeof createHubServiceClient>,
@@ -125,57 +126,10 @@ async function processOutboundDeliveries(
 
   let done = 0;
   let failed = 0;
-
-  for (const row of rows) {
-    const id = row.id as string;
-    const attempts = (row.attempts as number) + 1;
-    const event = (row.event as string) ?? "survey.application";
-
-    try {
-      const rawBody = JSON.stringify(row.payload ?? {});
-      const res = await fetch(row.url as string, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": "HubGeracaoA-Webhooks/1.0",
-          "X-Hub-Event": event,
-        },
-        body: rawBody,
-        signal: AbortSignal.timeout(15_000),
-      });
-      const respText = (await res.text().catch(() => "")).slice(0, 2000);
-
-      if (res.status >= 200 && res.status < 300) {
-        await hub
-          .from("outbound_deliveries")
-          .update({
-            status: "success",
-            http_status: res.status,
-            response_body: respText,
-            attempts,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("id", id);
-        done++;
-      } else {
-        throw new Error(`http_${res.status}: ${respText.slice(0, 200)}`);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      const finalStatus = attempts >= MAX_JOB_ATTEMPTS ? "failed" : "pending";
-      const backoffMin = Math.min(60, Math.pow(2, attempts));
-      await hub
-        .from("outbound_deliveries")
-        .update({
-          status: finalStatus,
-          attempts,
-          last_error: msg.slice(0, 500),
-          run_after: new Date(Date.now() + backoffMin * 60_000).toISOString(),
-        })
-        .eq("id", id);
-      failed++;
-    }
+  for (const row of rows as DeliveryRow[]) {
+    const result = await attemptDelivery(hub, row);
+    if (result === "success") done++;
+    else failed++;
   }
-
   return { picked: rows.length, done, failed };
 }
