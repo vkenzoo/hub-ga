@@ -132,6 +132,7 @@ export default async function Page() {
                     <th className="text-left font-medium px-4 py-2.5">Investimento</th>
                     <th className="text-left font-medium px-4 py-2.5 w-24">Score</th>
                     <th className="text-left font-medium px-4 py-2.5 w-28">GHL</th>
+                    <th className="text-right font-medium px-4 py-2.5 w-16"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -162,6 +163,9 @@ export default async function Page() {
                         <td className="px-4 py-2.5 text-xs tabular-nums">{r.score != null ? r.score : <span className="text-muted">—</span>}</td>
                         <td className="px-4 py-2.5">
                           <span className="chip"><span className={`dot ${chip.dot}`} />{chip.label}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <Link href={`/aplicacoes/${r.id}`} className="btn btn-sm btn-ghost">→</Link>
                         </td>
                       </tr>
                     );
