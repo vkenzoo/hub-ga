@@ -64,8 +64,11 @@ export default async function Page({
         )}
 
         <div className="card border-info/30 bg-info/5 px-4 py-3 text-sm text-text2">
-          <strong className="text-info">Disparo real:</strong> por enquanto só guarda a config. A
-          rota que dispara HMAC assinado fica pra fase futura.
+          <strong className="text-info">Disparo:</strong> o evento{" "}
+          <code className="font-mono">survey.application</code> (Aplicação) <strong>dispara de verdade</strong> —
+          o hub faz POST pro destino quando chega uma resposta de form de aplicação (entrega assíncrona,
+          com retry; acompanhe em <Link href="/aplicacoes/posts" className="text-brand hover:underline">Monitoramento</Link>).
+          Os eventos de venda/assinatura ainda só guardam a config (disparo deles fica pra fase futura).
         </div>
 
         {sp.new_secret && sp.new_id && (
