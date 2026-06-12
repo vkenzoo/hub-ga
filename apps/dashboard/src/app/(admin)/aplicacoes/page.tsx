@@ -25,11 +25,26 @@ function fmtDateTime(iso: string): string {
   });
 }
 
-/** Extrai a resposta cuja PERGUNTA casa com o termo (ex: "investimento"). */
-function findAnswer(answers: Record<string, unknown> | null, term: RegExp): string | null {
+/** Normaliza: minúsculo, sem acento. */
+function normalizeKey(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+// Palavras que indicam a pergunta de "quanto tem pra investir/caixa".
+// Cobre variações: investimento, caixa disponível, faturamento, orçamento, capital, verba.
+const INVEST_KEYWORDS = ["invest", "caixa", "dispon", "fatur", "orcament", "capital", "verba", "budget"];
+
+/** Acha a resposta da pergunta de investimento/caixa (por palavra-chave na pergunta). */
+function findInvestment(answers: Record<string, unknown> | null): string | null {
   if (!answers) return null;
   for (const [k, v] of Object.entries(answers)) {
-    if (term.test(k) && (typeof v === "string" || typeof v === "number")) return String(v);
+    const nk = normalizeKey(k);
+    if (
+      INVEST_KEYWORDS.some((w) => nk.includes(w)) &&
+      (typeof v === "string" || typeof v === "number")
+    ) {
+      return String(v);
+    }
   }
   return null;
 }
@@ -137,7 +152,7 @@ export default async function Page() {
                 </thead>
                 <tbody className="divide-y divide-line">
                   {rows.map((r) => {
-                    const invest = findAnswer(r.answers, /investiment|invest/i);
+                    const invest = findInvestment(r.answers);
                     const s = statusByRef.get(r.id) ?? "none";
                     const chip = STATUS_CHIP[s];
                     return (
