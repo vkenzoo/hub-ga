@@ -1,17 +1,18 @@
--- Receita LÍQUIDA real do produtor por venda (o que de fato cai na conta).
+-- Receita LÍQUIDA real do produtor — SÓ em venda de AFILIADO.
 --
--- Antes a receita usava purchases.amount (valor cheio da venda). Isso supercontava
--- vendas de afiliado: numa venda de R$67 com afiliado, o produtor recebe só ~R$0,62
--- (o afiliado fica com ~R$61). Agora guardamos o líquido real:
---   Hotmart: commissions[source=PRODUCER].value   (já desconta Hotmart + afiliado)
---   Assiny:  transaction.net_amount / 100          (desconta taxa do gateway)
+-- Em venda de afiliado o afiliado fica com uma parte e você recebe menos: numa
+-- venda de R$67 o produtor recebe ~R$0,62. Aí a receita real = comissão PRODUCER.
+-- Em venda DIRETA (sem afiliado) a receita é o valor cheio (amount) → net_amount
+-- fica NULL e o dashboard usa amount.
+--   Hotmart c/ afiliado: commissions[source=PRODUCER].value
+--   Hotmart direto / Assiny: NULL → fallback amount (valor cheio)
 --
--- net_amount NULL = sem dado de comissão → dashboards caem no fallback (amount cheio).
+-- net_amount NULL = usa o valor cheio no dashboard.
 
 alter table purchases
   add column if not exists net_amount numeric(12,2);
 
--- ── Backfill Hotmart: pega o value do source=PRODUCER no array commissions ──
+-- ── Backfill Hotmart COM AFILIADO: comissão do PRODUCER ──
 update purchases p
 set net_amount = sub.producer_val
 from (
@@ -26,11 +27,17 @@ from (
   from webhook_executions we
   where we.gateway = 'hotmart'
     and we.raw_body::jsonb #> '{data,commissions}' is not null
+    and we.raw_body::jsonb #>> '{data,affiliates,0,affiliate_code}' is not null
 ) sub
 where p.gateway = 'hotmart'
   and p.gateway_event_id = sub.gateway_event_id
-  and sub.producer_val is not null
-  and p.net_amount is null;
+  and p.affiliate_id is not null
+  and sub.producer_val is not null;
+
+-- Corrige instalações que já rodaram o backfill antigo (net em venda direta):
+-- venda sem afiliado volta a usar o valor cheio.
+update purchases set net_amount = null
+where net_amount is not null and (affiliate_id is null or gateway <> 'hotmart');
 
 -- Assiny NÃO recebe backfill de net: não tem afiliado e a taxa de gateway é
 -- mínima, então receita = bruto (amount). O backfill antigo usava
