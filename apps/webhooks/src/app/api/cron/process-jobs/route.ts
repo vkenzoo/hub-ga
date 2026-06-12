@@ -92,5 +92,90 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, picked: jobs?.length ?? 0, done, failed });
+  // ── Drena outbound_deliveries (fila + log de POSTs pra fora, ex: GHL) ──
+  const delivery = await processOutboundDeliveries(hub);
+
+  return NextResponse.json({
+    ok: true,
+    picked: jobs?.length ?? 0,
+    done,
+    failed,
+    deliveries: delivery,
+  });
+}
+
+/**
+ * Pega outbound_deliveries pendentes, faz POST e atualiza status. Falha → retry
+ * com backoff exponencial (run_after). Após MAX_JOB_ATTEMPTS → status='failed'.
+ */
+async function processOutboundDeliveries(
+  hub: ReturnType<typeof createHubServiceClient>,
+): Promise<{ picked: number; done: number; failed: number }> {
+  const BATCH = 20;
+  const { data: rows, error } = await hub
+    .from("outbound_deliveries")
+    .select("id, url, payload, event, attempts")
+    .eq("status", "pending")
+    .lte("run_after", new Date().toISOString())
+    .limit(BATCH);
+
+  if (error || !rows || rows.length === 0) {
+    return { picked: 0, done: 0, failed: 0 };
+  }
+
+  let done = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    const id = row.id as string;
+    const attempts = (row.attempts as number) + 1;
+    const event = (row.event as string) ?? "survey.application";
+
+    try {
+      const rawBody = JSON.stringify(row.payload ?? {});
+      const res = await fetch(row.url as string, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "HubGeracaoA-Webhooks/1.0",
+          "X-Hub-Event": event,
+        },
+        body: rawBody,
+        signal: AbortSignal.timeout(15_000),
+      });
+      const respText = (await res.text().catch(() => "")).slice(0, 2000);
+
+      if (res.status >= 200 && res.status < 300) {
+        await hub
+          .from("outbound_deliveries")
+          .update({
+            status: "success",
+            http_status: res.status,
+            response_body: respText,
+            attempts,
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", id);
+        done++;
+      } else {
+        throw new Error(`http_${res.status}: ${respText.slice(0, 200)}`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const finalStatus = attempts >= MAX_JOB_ATTEMPTS ? "failed" : "pending";
+      const backoffMin = Math.min(60, Math.pow(2, attempts));
+      await hub
+        .from("outbound_deliveries")
+        .update({
+          status: finalStatus,
+          attempts,
+          last_error: msg.slice(0, 500),
+          run_after: new Date(Date.now() + backoffMin * 60_000).toISOString(),
+        })
+        .eq("id", id);
+      failed++;
+    }
+  }
+
+  return { picked: rows.length, done, failed };
 }

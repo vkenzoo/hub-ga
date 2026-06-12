@@ -54,4 +54,5 @@ export const OUTBOUND_EVENTS = [
   { value: "subscription.past_due", label: "Assinatura atrasada" },
   { value: "subscription.cancelled", label: "Assinatura cancelada" },
   { value: "customer.created", label: "Cliente novo" },
+  { value: "survey.application", label: "Aplicação (form de call)" },
 ];

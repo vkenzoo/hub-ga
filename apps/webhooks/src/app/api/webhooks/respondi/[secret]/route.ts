@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHubServiceClient } from "@hub/db";
 import { timingSafeEqual } from "node:crypto";
 import { extractEmail, extractPhone, classifyResponse, type QualificationRule } from "@/lib/surveys";
+import { isApplicationForm, enqueueSurveyForward } from "@/lib/outbound/survey-forward";
 import { logEvent } from "@/lib/logger";
 import { runWithExecution } from "@/lib/execution-context";
 import { createExecution, finishExecution, type ExecutionStatus } from "@/lib/executions";
@@ -179,24 +180,28 @@ export async function POST(
 
     const utms = payload.respondent?.respondent_utms ?? {};
 
-    const { error: insErr } = await hub.from("survey_responses").insert({
-      respondi_respondent_id: respondentId,
-      form_id: formId,
-      form_name: payload.form?.form_name ?? null,
-      email,
-      phone,
-      score: payload.respondent?.score ?? null,
-      utm_source: utms.utm_source ?? null,
-      utm_medium: utms.utm_medium ?? null,
-      utm_campaign: utms.utm_campaign ?? null,
-      utm_content: utms.utm_content ?? null,
-      utm_term: utms.utm_term ?? null,
-      answers,
-      raw_answers: rawAnswers,
-      raw_payload: payload,
-      qualification,
-      customer_id: customerId,
-    });
+    const { data: inserted, error: insErr } = await hub
+      .from("survey_responses")
+      .insert({
+        respondi_respondent_id: respondentId,
+        form_id: formId,
+        form_name: payload.form?.form_name ?? null,
+        email,
+        phone,
+        score: payload.respondent?.score ?? null,
+        utm_source: utms.utm_source ?? null,
+        utm_medium: utms.utm_medium ?? null,
+        utm_campaign: utms.utm_campaign ?? null,
+        utm_content: utms.utm_content ?? null,
+        utm_term: utms.utm_term ?? null,
+        answers,
+        raw_answers: rawAnswers,
+        raw_payload: payload,
+        qualification,
+        customer_id: customerId,
+      })
+      .select("id")
+      .single();
 
     if (insErr) {
       console.error("[respondi] insert failed:", insErr);
@@ -218,6 +223,34 @@ export async function POST(
       },
       customerId: customerId ?? undefined,
     });
+
+    // Form de APLICAÇÃO → enfileira forward pro GHL (e outros destinos ativos).
+    // try/catch isolado: falha no enqueue não derruba o 200 pro Respondi.
+    if (isApplicationForm(payload.form?.form_name) && inserted?.id) {
+      try {
+        const nameAnswer = Object.entries(answers).find(([k]) =>
+          /nome|name/i.test(k),
+        )?.[1];
+        await enqueueSurveyForward(hub, {
+          surveyResponseId: inserted.id as string,
+          formId,
+          formName: payload.form?.form_name ?? null,
+          respondentId,
+          email,
+          phone,
+          name: typeof nameAnswer === "string" ? nameAnswer : null,
+          score: payload.respondent?.score ?? null,
+          utms,
+          answers,
+          receivedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        await logEvent(hub, "survey.forward_enqueue_failed", {
+          level: "error",
+          payload: { form_id: formId, error: e instanceof Error ? e.message : String(e) },
+        });
+      }
+    }
 
     return finish("completed", 200, {
       ok: true,
