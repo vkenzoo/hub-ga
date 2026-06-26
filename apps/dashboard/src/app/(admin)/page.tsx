@@ -110,7 +110,7 @@ async function getOverview(period: Period, from?: string, to?: string) {
     { count: productsCount },
     { count: systemsCount },
     { count: grantsCount },
-    { data: paidRows },
+    revenueRes,
     newStudentsResult,
     { data: latestEventsData },
     { data: latestPurchasesData },
@@ -120,11 +120,8 @@ async function getOverview(period: Period, from?: string, to?: string) {
     sb.from("products").select("*", { count: "exact", head: true }),
     sb.from("systems").select("*", { count: "exact", head: true }),
     sb.from("access_grants").select("*", { count: "exact", head: true }),
-    sb
-      .from("purchases")
-      .select("amount, net_amount, subscription_cycle, created_at")
-      .eq("status", "paid")
-      .limit(50000),
+    // Soma server-side (sem corte de linhas) — total + período + renovações + nº.
+    sb.rpc("hub_revenue_summary", { p_start: startISO ?? null, p_end: endISO ?? null }),
     newStudentsQuery ?? Promise.resolve({ count: null as number | null }),
     sb
       .from("events_log")
@@ -138,29 +135,54 @@ async function getOverview(period: Period, from?: string, to?: string) {
       .limit(5),
   ]);
 
-  const paid = (paidRows ?? []) as Array<{
-    amount: number;
-    net_amount: number | null;
-    subscription_cycle: number | null;
-    created_at: string;
-  }>;
-  // Receita = líquido real do produtor (net_amount; fallback valor cheio)
   const netOf = (p: { net_amount: number | null; amount: number }) =>
     p.net_amount != null ? Number(p.net_amount) : Number(p.amount);
 
-  // Filtro por período em JS sobre os mesmos dados
-  const inPeriod = paid.filter((p) => {
-    if (startISO && p.created_at < startISO) return false;
-    if (endISO && p.created_at >= endISO) return false;
-    return true;
-  });
+  let totalRevenue = 0;
+  let periodRevenue = 0;
+  let periodRenewalRevenue = 0;
+  let periodSalesCount = 0;
 
-  const totalRevenue = paid.reduce((s, p) => s + netOf(p), 0);
-  const periodRevenue = inPeriod.reduce((s, p) => s + netOf(p), 0);
-  const periodRenewalRevenue = inPeriod
-    .filter((p) => (p.subscription_cycle ?? 1) > 1)
-    .reduce((s, p) => s + netOf(p), 0);
-  const periodSalesCount = inPeriod.length;
+  const rpcRow = (() => {
+    const d = (revenueRes as { data?: unknown; error?: unknown }).data;
+    return Array.isArray(d) ? d[0] : d;
+  })() as
+    | { total_revenue: number; period_revenue: number; period_renewal_revenue: number; period_sales_count: number }
+    | null
+    | undefined;
+
+  if (!(revenueRes as { error?: unknown }).error && rpcRow) {
+    totalRevenue = Number(rpcRow.total_revenue ?? 0);
+    periodRevenue = Number(rpcRow.period_revenue ?? 0);
+    periodRenewalRevenue = Number(rpcRow.period_renewal_revenue ?? 0);
+    periodSalesCount = Number(rpcRow.period_sales_count ?? 0);
+  } else {
+    // Fallback (RPC ainda não criada): busca ordenada por data desc + soma no JS.
+    // O order desc garante que as vendas recentes (hoje) entram mesmo com corte.
+    const { data: paidRows } = await sb
+      .from("purchases")
+      .select("amount, net_amount, subscription_cycle, created_at")
+      .eq("status", "paid")
+      .order("created_at", { ascending: false })
+      .limit(50000);
+    const paid = (paidRows ?? []) as Array<{
+      amount: number;
+      net_amount: number | null;
+      subscription_cycle: number | null;
+      created_at: string;
+    }>;
+    const inPeriod = paid.filter((p) => {
+      if (startISO && p.created_at < startISO) return false;
+      if (endISO && p.created_at >= endISO) return false;
+      return true;
+    });
+    totalRevenue = paid.reduce((s, p) => s + netOf(p), 0);
+    periodRevenue = inPeriod.reduce((s, p) => s + netOf(p), 0);
+    periodRenewalRevenue = inPeriod
+      .filter((p) => (p.subscription_cycle ?? 1) > 1)
+      .reduce((s, p) => s + netOf(p), 0);
+    periodSalesCount = inPeriod.length;
+  }
 
   const newStudents = newStudentsResult.count ?? customersCount ?? 0;
   const latestEvents = latestEventsData;
