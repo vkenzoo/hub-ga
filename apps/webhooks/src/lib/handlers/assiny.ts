@@ -27,6 +27,14 @@ function classifyAssinyEvent(
 
   if (t.includes("refund")) return "purchase_refunded";
   if (t.includes("chargeback")) return "purchase_chargeback";
+  if (
+    t.includes("refused") ||
+    t.includes("declined") ||
+    t.includes("payment_failed") ||
+    t.includes("failed_purchase")
+  ) {
+    return "purchase_refused";
+  }
 
   if (t.includes("subscription_cancel") || t.includes("assinatura_cancel")) {
     return "subscription_cancelled";
@@ -63,6 +71,7 @@ function classifyAssinyEvent(
 function mapPurchaseStatus(kind: EventKind): PurchaseStatus {
   if (kind === "purchase_refunded") return "refunded";
   if (kind === "purchase_chargeback") return "chargeback";
+  if (kind === "purchase_refused") return "refused";
   return "paid";
 }
 

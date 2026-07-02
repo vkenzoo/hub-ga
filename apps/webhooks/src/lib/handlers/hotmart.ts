@@ -69,6 +69,7 @@ function classifyHotmartEvent(
 function mapPurchaseStatus(kind: EventKind): PurchaseStatus {
   if (kind === "purchase_refunded") return "refunded";
   if (kind === "purchase_chargeback") return "chargeback";
+  if (kind === "purchase_refused") return "refused";
   return "paid";
 }
 

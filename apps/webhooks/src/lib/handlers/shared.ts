@@ -11,7 +11,7 @@ import { resolveSaleAttribution, persistAttribution } from "./resolve-attributio
 import { enqueueOutboundDispatches, type OutboundEvent } from "../outbound/dispatch";
 
 export type Gateway = "assiny" | "hotmart";
-export type PurchaseStatus = "paid" | "refunded" | "chargeback" | "pending";
+export type PurchaseStatus = "paid" | "refunded" | "chargeback" | "refused" | "pending";
 
 /**
  * Canonicaliza o tipo do evento entre gateways.
@@ -26,6 +26,7 @@ export type EventKind =
   | "purchase_paid"
   | "purchase_refunded"
   | "purchase_chargeback"
+  | "purchase_refused"
   | "subscription_renewed"
   | "subscription_past_due"
   | "subscription_cancelled";
@@ -243,6 +244,68 @@ async function upsertCustomer(
 }
 
 /**
+ * Aplica mudança de status (estorno/chargeback/recusa) na venda ORIGINAL da
+ * transação, em vez de criar uma linha nova. Localiza main + order bumps pelo
+ * prefixo do tx id no gateway_event_id ("<tx>%") e revoga os grants.
+ *
+ * Idempotente: se a venda já estiver no status final (redelivery do webhook),
+ * não há linha 'paid' pra atualizar mas retorna handled=true assim mesmo, pra
+ * o chamador NÃO cair no fluxo de insert e duplicar.
+ *
+ * Retorna handled=false só quando não existe NENHUMA linha da transação (ex:
+ * estorno chegou antes da venda) — aí o chamador registra a linha normalmente.
+ */
+async function applyTransactionStatusChange(
+  hub: SupabaseClient,
+  p: NormalizedPurchase,
+): Promise<
+  | { handled: true; customerId: string; purchaseId: string }
+  | { handled: false }
+> {
+  const txId = p.txExternalId;
+  if (!txId) return { handled: false };
+
+  const { data: rows } = await hub
+    .from("purchases")
+    .select("id, customer_id, status")
+    .eq("gateway", p.gateway)
+    .like("gateway_event_id", `${txId}%`);
+
+  if (!rows || rows.length === 0) return { handled: false };
+
+  const paidRows = rows.filter((r) => r.status === "paid");
+  if (paidRows.length > 0) {
+    const ids = paidRows.map((r) => r.id as string);
+    await hub.from("purchases").update({ status: p.status }).in("id", ids);
+    for (const r of paidRows) {
+      try {
+        await revokeGrantsForPurchase(hub, r.id as string);
+      } catch (err) {
+        console.error("[applyTransactionStatusChange] revoke failed:", err);
+      }
+    }
+    await logEvent(hub, "webhook.status_changed", {
+      payload: {
+        gateway: p.gateway,
+        tx_id: txId,
+        kind: p.eventKind,
+        status: p.status,
+        affected: ids.length,
+      },
+      customerId: paidRows[0]!.customer_id as string,
+      purchaseId: paidRows[0]!.id as string,
+    });
+  }
+
+  const first = rows[0]!;
+  return {
+    handled: true,
+    customerId: first.customer_id as string,
+    purchaseId: first.id as string,
+  };
+}
+
+/**
  * Processa evento com transação (compra ou renovação).
  * Idempotente via (gateway, gateway_event_id).
  */
@@ -268,6 +331,25 @@ export async function recordPurchase(
       purchaseId: existing.id as string,
     });
     return { skipped: true, reason: "duplicate" };
+  }
+
+  // 1b. Estorno / chargeback / recusa: NÃO cria linha nova.
+  // Esses eventos chegam com gateway_event_id diferente do da venda (ex:
+  // "<tx>_refund" vs "<tx>_approved_purchase"), então o dedupe acima não pega.
+  // Sem isso, o hub inseria uma linha 'refunded' à parte e deixava a 'paid'
+  // original CONTANDO como faturamento. Aqui localizamos a(s) venda(s) da
+  // mesma transação (mesmo tx id) e atualizamos o status + revogamos grants.
+  if (
+    p.eventKind === "purchase_refunded" ||
+    p.eventKind === "purchase_chargeback" ||
+    p.eventKind === "purchase_refused"
+  ) {
+    const applied = await applyTransactionStatusChange(hub, p);
+    if (applied.handled) {
+      return { skipped: false, customerId: applied.customerId, purchaseId: applied.purchaseId };
+    }
+    // Não achou venda original (estorno chegou antes da venda?) → segue o
+    // fluxo normal e registra a linha, pra não perder o evento.
   }
 
   // 2. Resolve produto. Se não existir, auto-cadastra como rascunho e pula.

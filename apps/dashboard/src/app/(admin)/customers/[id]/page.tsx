@@ -75,6 +75,7 @@ function purchaseStatusChip(status: string) {
   if (status === "paid") return { dot: "bg-accent", label: "Pago" };
   if (status === "refunded") return { dot: "bg-warn", label: "Estornado" };
   if (status === "chargeback") return { dot: "bg-danger", label: "Chargeback" };
+  if (status === "refused") return { dot: "bg-text2", label: "Recusado" };
   return { dot: "bg-text2", label: status };
 }
 

@@ -1,0 +1,15 @@
+-- Adiciona o status 'refused' (pagamento recusado / declined) ao enum de purchases.
+--
+-- Antes: eventos de recusa da Assiny caíam em "unknown" no classificador e eram
+-- ignorados — a venda 'paid' original (quando existia) continuava contando como
+-- faturamento. Além disso, estorno/chargeback criavam uma LINHA NOVA 'refunded'
+-- em vez de atualizar a venda, então a 'paid' original também sobrevivia.
+--
+-- Correção de código (apps/webhooks/src/lib/handlers/shared.ts):
+--   applyTransactionStatusChange() localiza a venda original pelo tx id e
+--   atualiza o status (refunded/chargeback/refused) + revoga grants, sem
+--   duplicar. Este enum passa a aceitar 'refused'.
+--
+-- ADD VALUE não pode ser usado na MESMA transação que o cria; rode este arquivo
+-- isolado (é o que o supabase faz por migration).
+alter type purchase_status add value if not exists 'refused';
