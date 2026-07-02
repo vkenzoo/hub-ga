@@ -119,34 +119,6 @@ export default async function Page({
 
   const sb = createSupabaseAdmin();
 
-  // Puxa todas as compras no período (paid + refunded) DE PRODUTOS DE AQUISIÇÃO.
-  // Inner join filtra fora monetização/outros. Limit alto pra escala atual.
-  let q = sb
-    .from("purchases")
-    .select(
-      "id, amount, net_amount, status, payment_method, customer_id, product_id, utm_source, created_at, products!inner(name, role)",
-    )
-    .eq("products.role", "acquisition")
-    .in("status", ["paid", "refunded"])
-    .order("created_at", { ascending: true })
-    .limit(50000);
-  if (startISO) q = q.gte("created_at", startISO);
-  if (endISO) q = q.lt("created_at", endISO);
-
-  // Investimento Meta — spend de campanhas classificadas como 'acquisition' no período.
-  // Convertemos date_start (date) → comparação com startISO (timestamptz) via slice(0,10).
-  const startDate = startISO ? startISO.slice(0, 10) : null;
-  const endDate = endISO ? endISO.slice(0, 10) : null;
-  let metaQ = sb
-    .from("meta_ad_insights_daily")
-    .select("spend_cents, date_start")
-    .eq("classification", "acquisition")
-    .limit(100000);
-  if (startDate) metaQ = metaQ.gte("date_start", startDate);
-  if (endDate) metaQ = metaQ.lt("date_start", endDate);
-
-  const [{ data: rows }, { data: metaRows }] = await Promise.all([q, metaQ]);
-
   interface Row {
     id: string;
     amount: number;
@@ -159,7 +131,62 @@ export default async function Page({
     created_at: string;
     products: { name: string; role: string } | null;
   }
-  const purchases = (rows ?? []) as unknown as Row[];
+
+  // Puxa TODAS as compras do período (paid + refunded) de produtos de aquisição,
+  // PAGINANDO em blocos de 1000. O PostgREST corta cada request em ~1000 linhas;
+  // com >100 vendas/dia, um único request perderia os dias recentes. Paginar
+  // garante o dataset completo. Ordena por (created_at, id) pra paginação estável.
+  async function fetchAllPurchases(): Promise<Row[]> {
+    const PAGE = 1000;
+    const out: Row[] = [];
+    for (let from = 0; ; from += PAGE) {
+      let q = sb
+        .from("purchases")
+        .select(
+          "id, amount, net_amount, status, payment_method, customer_id, product_id, utm_source, created_at, products!inner(name, role)",
+        )
+        .eq("products.role", "acquisition")
+        .in("status", ["paid", "refunded"])
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (startISO) q = q.gte("created_at", startISO);
+      if (endISO) q = q.lt("created_at", endISO);
+      const { data, error } = await q;
+      if (error || !data || data.length === 0) break;
+      out.push(...(data as unknown as Row[]));
+      if (data.length < PAGE) break;
+    }
+    return out;
+  }
+
+  // Investimento Meta — spend de campanhas 'acquisition' no período, TAMBÉM paginado
+  // (per ad/dia pode passar de 1000 linhas num mês).
+  const startDate = startISO ? startISO.slice(0, 10) : null;
+  const endDate = endISO ? endISO.slice(0, 10) : null;
+  interface MetaRow { spend_cents: number; date_start: string }
+  async function fetchAllMeta(): Promise<MetaRow[]> {
+    const PAGE = 1000;
+    const out: MetaRow[] = [];
+    for (let from = 0; ; from += PAGE) {
+      let q = sb
+        .from("meta_ad_insights_daily")
+        .select("id, spend_cents, date_start")
+        .eq("classification", "acquisition")
+        .order("date_start", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (startDate) q = q.gte("date_start", startDate);
+      if (endDate) q = q.lt("date_start", endDate);
+      const { data, error } = await q;
+      if (error || !data || data.length === 0) break;
+      out.push(...(data as unknown as MetaRow[]));
+      if (data.length < PAGE) break;
+    }
+    return out;
+  }
+
+  const [purchases, metaRows] = await Promise.all([fetchAllPurchases(), fetchAllMeta()]);
   // Receita real do produtor: líquido quando disponível, senão valor cheio.
   const netOf = (p: { net_amount: number | null; amount: number }) =>
     p.net_amount != null ? Number(p.net_amount) : Number(p.amount);
