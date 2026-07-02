@@ -136,6 +136,10 @@ export default async function Page({
   // PAGINANDO em blocos de 1000. O PostgREST corta cada request em ~1000 linhas;
   // com >100 vendas/dia, um único request perderia os dias recentes. Paginar
   // garante o dataset completo. Ordena por (created_at, id) pra paginação estável.
+  //
+  // EXCLUI vendas de afiliado (affiliate_id not null): elas não são aquisição do
+  // seu funil — você recebe só a comissão e o afiliado trouxe o lead. Ficam no
+  // dashboard /afiliados.
   async function fetchAllPurchases(): Promise<Row[]> {
     const PAGE = 1000;
     const out: Row[] = [];
@@ -147,6 +151,7 @@ export default async function Page({
         )
         .eq("products.role", "acquisition")
         .in("status", ["paid", "refunded"])
+        .is("affiliate_id", null)
         .order("created_at", { ascending: true })
         .order("id", { ascending: true })
         .range(from, from + PAGE - 1);
