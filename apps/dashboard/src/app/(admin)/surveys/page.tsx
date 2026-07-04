@@ -97,6 +97,9 @@ export default async function Page({
     .select(
       "id, respondi_respondent_id, form_id, form_name, email, phone, score, utm_source, utm_campaign, qualification, customer_id, received_at, answers, customers(id, email, name)",
     )
+    // Forms de APLICAÇÃO (nome com "aplica") vivem em /aplicacoes — não entram
+    // na Pesquisa. Mantém respostas sem form_name (não são aplicação).
+    .or("form_name.is.null,form_name.not.ilike.*aplica*")
     .order("received_at", { ascending: false })
     .limit(500);
 
