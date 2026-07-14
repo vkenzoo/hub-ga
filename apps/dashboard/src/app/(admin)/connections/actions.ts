@@ -146,6 +146,7 @@ export async function createOutbound(formData: FormData) {
   const label = String(formData.get("label") ?? "").trim();
   const url = String(formData.get("url") ?? "").trim();
   const events = formData.getAll("events").map(String);
+  const formFilter = String(formData.get("form_filter") ?? "").trim();
 
   if (!label || !url) redirect(sectionRedirect("outbound", "error=missing_fields"));
   if (!url.startsWith("https://")) redirect(sectionRedirect("outbound", "error=invalid_url"));
@@ -155,7 +156,7 @@ export async function createOutbound(formData: FormData) {
 
   const { data, error } = await sb
     .from("outbound_webhooks")
-    .insert({ label, url, events, secret, active: true })
+    .insert({ label, url, events, secret, active: true, form_filter: formFilter || null })
     .select("id")
     .single();
 

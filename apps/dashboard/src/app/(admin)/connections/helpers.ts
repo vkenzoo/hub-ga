@@ -16,6 +16,7 @@ export interface OutboundRow {
   events: string[];
   secret: string | null;
   active: boolean;
+  form_filter: string | null;
   last_fired_at: string | null;
   last_status_code: number | null;
   created_at: string;

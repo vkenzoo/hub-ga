@@ -126,6 +126,15 @@ export default async function Page({
                         {e}
                       </span>
                     ))}
+                    {w.events.includes("survey.application") && (
+                      <span className="chip text-2xs">
+                        {w.form_filter ? (
+                          <>form: <code className="font-mono ml-1">{w.form_filter}</code></>
+                        ) : (
+                          <span className="text-warn">sem filtro de form</span>
+                        )}
+                      </span>
+                    )}
                   </div>
                 </li>
               ))}
@@ -140,6 +149,18 @@ export default async function Page({
           <div className="p-4 space-y-4">
             <Field name="label" label="Nome" placeholder="ex: Notificar Slack" required />
             <Field name="url" label="URL (HTTPS)" placeholder="https://hooks.slack.com/..." required mono />
+            <div>
+              <Field
+                name="form_filter"
+                label="Filtro de formulário (nome contém)"
+                placeholder="ex: aplica  ·  pesquisa sistema"
+              />
+              <p className="text-2xs text-muted mt-1">
+                Só afeta o evento <code className="font-mono">survey.application</code>: este destino
+                recebe apenas respostas de forms cujo nome contém esse texto (sem acento/maiúscula).
+                Vazio = não recebe forward de form.
+              </p>
+            </div>
             <div>
               <span className="label block mb-1.5">Eventos pra disparar</span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 border border-line rounded-md p-3">

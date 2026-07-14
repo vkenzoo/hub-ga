@@ -55,7 +55,7 @@ export async function enqueueSurveyForward(
 ): Promise<{ enqueued: number }> {
   const { data: subs, error } = await hub
     .from("outbound_webhooks")
-    .select("id, label, url, active")
+    .select("id, label, url, active, form_filter")
     .eq("active", true)
     .contains("events", [SURVEY_APPLICATION_EVENT]);
 
@@ -63,7 +63,21 @@ export async function enqueueSurveyForward(
     console.error("[survey-forward] lookup failed:", error);
     return { enqueued: 0 };
   }
-  const destinations = (subs ?? []) as Array<{ id: string; label: string; url: string }>;
+
+  // Roteamento por formulário: cada destino só recebe respostas de forms cujo
+  // nome (normalizado) CONTÉM o form_filter dele. Sem filtro (null) → não recebe
+  // forward de form (evita broadcast acidental).
+  const formName = normalize(data.formName ?? "");
+  const allSubs = (subs ?? []) as Array<{
+    id: string;
+    label: string;
+    url: string;
+    form_filter: string | null;
+  }>;
+  const destinations = allSubs.filter((d) => {
+    if (!d.form_filter) return false;
+    return formName.includes(normalize(d.form_filter));
+  });
   if (destinations.length === 0) return { enqueued: 0 };
 
   const payload = {

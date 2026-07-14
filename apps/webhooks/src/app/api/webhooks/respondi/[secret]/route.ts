@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createHubServiceClient } from "@hub/db";
 import { timingSafeEqual } from "node:crypto";
 import { extractEmail, extractPhone, classifyResponse, type QualificationRule } from "@/lib/surveys";
-import { isApplicationForm, enqueueSurveyForward } from "@/lib/outbound/survey-forward";
+import { enqueueSurveyForward } from "@/lib/outbound/survey-forward";
 import { logEvent } from "@/lib/logger";
 import { runWithExecution } from "@/lib/execution-context";
 import { createExecution, finishExecution, type ExecutionStatus } from "@/lib/executions";
@@ -224,9 +224,11 @@ export async function POST(
       customerId: customerId ?? undefined,
     });
 
-    // Form de APLICAÇÃO → enfileira forward pro GHL (e outros destinos ativos).
+    // Enfileira forward pro GHL. O roteamento agora é POR FORMULÁRIO: cada destino
+    // ativo só recebe se o form_filter dele casar com o nome do form (ver
+    // enqueueSurveyForward). Sem destino casando, não enfileira nada.
     // try/catch isolado: falha no enqueue não derruba o 200 pro Respondi.
-    if (isApplicationForm(payload.form?.form_name) && inserted?.id) {
+    if (inserted?.id) {
       try {
         const nameAnswer = Object.entries(answers).find(([k]) =>
           /nome|name/i.test(k),
