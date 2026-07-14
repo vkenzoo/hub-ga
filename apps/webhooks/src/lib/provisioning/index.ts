@@ -63,7 +63,7 @@ export async function provisionForPurchase(
   customerId: string,
   productId: string,
   purchaseId: string,
-  opts: { gateway?: "assiny" | "hotmart"; gatewaySubscriptionId?: string } = {},
+  opts: { gateway?: "assiny" | "hotmart" | "hubla"; gatewaySubscriptionId?: string } = {},
 ): Promise<void> {
   const [{ data: customer }, { data: product }, { data: entitlements }] = await Promise.all([
     hub.from("customers").select("id,email,name").eq("id", customerId).maybeSingle(),

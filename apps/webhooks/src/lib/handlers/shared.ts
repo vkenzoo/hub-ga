@@ -10,7 +10,7 @@ import { logEvent } from "../logger";
 import { resolveSaleAttribution, persistAttribution } from "./resolve-attribution";
 import { enqueueOutboundDispatches, type OutboundEvent } from "../outbound/dispatch";
 
-export type Gateway = "assiny" | "hotmart";
+export type Gateway = "assiny" | "hotmart" | "hubla";
 export type PurchaseStatus = "paid" | "refunded" | "chargeback" | "refused" | "pending";
 
 /**

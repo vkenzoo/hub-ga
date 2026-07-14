@@ -12,7 +12,7 @@ export type ExecutionStatus =
   | "completed"
   | "failed";
 
-export type Platform = "assiny" | "hotmart" | "respondi";
+export type Platform = "assiny" | "hotmart" | "hubla" | "respondi";
 
 interface CreateExecutionParams {
   gateway: Platform;  // mantido como "gateway" pra compatibilidade com schema

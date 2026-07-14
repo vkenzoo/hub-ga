@@ -82,6 +82,7 @@ async function updateProduct(formData: FormData) {
       gateway_ids: {
         assiny: String(formData.get("assiny_id") ?? "").trim(),
         hotmart: String(formData.get("hotmart_id") ?? "").trim(),
+        hubla: String(formData.get("hubla_id") ?? "").trim(),
       },
     })
     .eq("id", id);
@@ -249,6 +250,13 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
               label="ID do produto no Hotmart"
               defaultValue={p.gateway_ids?.hotmart ?? ""}
               placeholder="ex: 999888"
+              mono
+            />
+            <Field
+              name="hubla_id"
+              label="ID do produto na Hubla"
+              defaultValue={p.gateway_ids?.hubla ?? ""}
+              placeholder="ex: inAVzweR0QYw5y03K5mq"
               mono
             />
             <label className="flex items-center gap-2.5 text-sm md:col-span-2">

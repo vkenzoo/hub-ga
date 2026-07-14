@@ -22,3 +22,10 @@ export function verifyHotmart(headerToken: string | null, secret: string): boole
   if (!headerToken) return false;
   return safeEqual(headerToken.trim(), secret);
 }
+
+// Hubla: x-hubla-token é um token estático compartilhado (não é HMAC).
+// Doc: https://hubla.gitbook.io/docs/webhooks/proteja-seu-endpoint
+export function verifyHubla(headerToken: string | null, secret: string): boolean {
+  if (!headerToken) return false;
+  return safeEqual(headerToken.trim(), secret);
+}
