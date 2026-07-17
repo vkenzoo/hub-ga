@@ -199,11 +199,14 @@ export default async function Page({
   // ── Agregações de KPI ────────────────────────────────────
   const paid = purchases.filter((p) => p.status === "paid");
   const refunded = purchases.filter((p) => p.status === "refunded");
+  // Reembolso SOLICITADO (pendente) — separado do efetivado.
+  const refundRequested = purchases.filter((p) => p.status === "refund_requested");
 
   // Receita = LÍQUIDO real do produtor (já desconta gateway/Hotmart + afiliado).
   // Por isso NÃO subtraímos taxa de gateway de novo (seria dupla contagem).
   const receita = paid.reduce((s, p) => s + netOf(p), 0);
   const reembolsos = refunded.reduce((s, p) => s + netOf(p), 0);
+  const solicitados = refundRequested.reduce((s, p) => s + netOf(p), 0);
   // Meta ads insights são armazenados em centavos → divide por 100 pra alinhar com purchases (real)
   const investimentoCents = (metaRows ?? []).reduce(
     (s, r) => s + Number((r as { spend_cents: number }).spend_cents ?? 0),
@@ -217,9 +220,13 @@ export default async function Page({
   // Gastos totais sobre a receita líquida = só spend + imposto Meta (o gateway já
   // está embutido no líquido de cada venda).
   const gastosTotais = spendMeta + impostoMeta;
-  const margem = receita - reembolsos - investimento;
+  // Margem subtrai reembolsos efetivados E solicitados (pendentes) — conservador,
+  // mantém o número consistente com o comportamento anterior (quando solicitação
+  // já contava como reembolso).
+  const margem = receita - reembolsos - solicitados - investimento;
   const margemPct = receita > 0 ? (margem / receita) * 100 : 0;
   const taxaReembolso = receita > 0 ? (reembolsos / receita) * 100 : 0;
+  const taxaSolicitado = receita > 0 ? (solicitados / receita) * 100 : 0;
   const compradores = new Set(paid.map((p) => p.customer_id)).size;
   const tmf = compradores > 0 ? receita / compradores : 0;
   // ROAS = Receita líquida ÷ Spend Meta
@@ -410,7 +417,8 @@ export default async function Page({
         {/* KPIs principais */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard label="Faturamento líquido" value={<Hideable kind="money">{fmtMoney(receita)}</Hideable>} tone="accent" hint="Sua comissão (já s/ gateway + afiliado)" />
-          <StatCard label="Reembolsos" value={<Hideable kind="money">{fmtMoney(reembolsos)}</Hideable>} hint={<Hideable kind="count">{fmtPct(taxaReembolso) + " do faturamento"}</Hideable>} />
+          <StatCard label="Reembolsados" value={<Hideable kind="money">{fmtMoney(reembolsos)}</Hideable>} hint={<Hideable kind="count">{fmtPct(taxaReembolso) + " do faturamento"}</Hideable>} />
+          <StatCard label="Reembolsos solicitados" tone="warn" value={<Hideable kind="money">{fmtMoney(solicitados)}</Hideable>} hint={<Hideable kind="count">{fmtPct(taxaSolicitado) + " · pendente (não confirmado)"}</Hideable>} />
           <StatCard
             label="Margem de contribuição"
             value={<Hideable kind="money">{fmtMoney(margem)}</Hideable>}

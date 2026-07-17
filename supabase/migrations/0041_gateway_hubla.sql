@@ -1,0 +1,11 @@
+-- Adiciona 'hubla' ao enum `gateway`.
+--
+-- A coluna purchases.gateway (e subscriptions.gateway, lost_purchases.platform
+-- etc.) usa o enum `gateway`, que só tinha ('assiny','hotmart'). O handler da
+-- Hubla insere gateway='hubla' → sem esse valor no enum, o INSERT falha com
+-- "invalid input value for enum gateway" (visto como purchase_insert_failed no
+-- webhook_executions). webhook_executions.gateway é TEXT, por isso a execution
+-- gravava mas a purchase não.
+--
+-- ADD VALUE não pode ser usado na MESMA transação que o cria; rode isolado.
+alter type gateway add value if not exists 'hubla';

@@ -62,10 +62,19 @@ const COLORS = {
 
 function TooltipBox({ active, payload, label }: {
   active?: boolean;
-  payload?: Array<{ dataKey?: string | number; name?: string; value: number; color: string }>;
+  payload?: Array<{
+    dataKey?: string | number;
+    name?: string;
+    value: number;
+    color: string;
+    payload?: DailyPoint;
+  }>;
   label?: string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
+  // Todas as entries do tooltip carregam a linha completa do dia — usamos ela
+  // pra calcular a % de reembolso sobre o faturamento daquele dia.
+  const row = payload[0]?.payload;
   return (
     <div className="bg-surface border border-line rounded-md p-2 shadow-lg text-xs">
       <div className="text-text2 mb-1">{label}</div>
@@ -74,11 +83,17 @@ function TooltipBox({ active, payload, label }: {
         const valueText = isRoas
           ? Number(p.value).toFixed(2).replace(".", ",")
           : `R$ ${Number(p.value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        // % de reembolso = reembolsos ÷ faturamento do dia
+        const pctText =
+          p.dataKey === "reembolsos" && row && row.receita > 0
+            ? ` (${((Number(p.value) / row.receita) * 100).toFixed(1).replace(".", ",")}%)`
+            : null;
         return (
           <div key={i} className="flex items-center gap-2 tabular-nums">
             <span className="dot" style={{ background: p.color }} />
             <span className="text-text2">{p.name}:</span>
             <span className="text-text">{valueText}</span>
+            {pctText && <span className="text-text2">{pctText}</span>}
           </div>
         );
       })}

@@ -25,6 +25,11 @@ function classifyAssinyEvent(
 ): EventKind | `lost:${LostKind}` | "unknown" {
   const t = `${eventName} ${status ?? ""}`.toLowerCase();
 
+  // SOLICITAÇÃO de reembolso (ainda não efetivada) — tem que vir ANTES do
+  // "refund" genérico, senão "request_refund" cairia em purchase_refunded.
+  if (t.includes("request_refund") || t.includes("refund_request")) {
+    return "purchase_refund_requested";
+  }
   if (t.includes("refund")) return "purchase_refunded";
   if (t.includes("chargeback")) return "purchase_chargeback";
   if (
@@ -72,6 +77,7 @@ function mapPurchaseStatus(kind: EventKind): PurchaseStatus {
   if (kind === "purchase_refunded") return "refunded";
   if (kind === "purchase_chargeback") return "chargeback";
   if (kind === "purchase_refused") return "refused";
+  if (kind === "purchase_refund_requested") return "refund_requested";
   return "paid";
 }
 

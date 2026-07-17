@@ -1,0 +1,13 @@
+-- Adiciona 'refund_requested' (reembolso SOLICITADO, ainda não concluído) ao
+-- enum purchase_status.
+--
+-- A Assiny manda 2 eventos distintos: `request_refund` (solicitação) e
+-- `refunded_purchase` (reembolso efetivado). Antes os dois caíam em 'refunded'
+-- (ambos contêm "refund"), misturando solicitação com reembolso concluído.
+--
+-- Agora: request_refund -> 'refund_requested' (pendente, mantém acesso);
+-- quando o refunded_purchase chega, transiciona pra 'refunded' (aí revoga).
+-- O /acquisition mostra os dois separados (valor + %).
+--
+-- ADD VALUE não pode ser usado na MESMA transação que o cria; rode isolado.
+alter type purchase_status add value if not exists 'refund_requested';

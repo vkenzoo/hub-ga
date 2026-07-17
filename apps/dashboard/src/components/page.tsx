@@ -37,14 +37,18 @@ export function StatCard({
   label: string;
   value: React.ReactNode;
   hint?: React.ReactNode;
-  tone?: "default" | "accent";
+  tone?: "default" | "accent" | "warn";
 }) {
   return (
     <div className="card p-3 md:p-4">
       <div className="flex items-center justify-between">
         <span className="label">{label}</span>
       </div>
-      <div className={`text-2xl md:text-3xl font-medium mt-2 ${tone === "accent" ? "text-accent" : ""}`}>
+      <div
+        className={`text-2xl md:text-3xl font-medium mt-2 ${
+          tone === "accent" ? "text-accent" : tone === "warn" ? "text-warn" : ""
+        }`}
+      >
         {value}
       </div>
       {hint && <div className="text-xs text-muted mt-1">{hint}</div>}

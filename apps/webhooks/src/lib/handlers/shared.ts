@@ -11,7 +11,13 @@ import { resolveSaleAttribution, persistAttribution } from "./resolve-attributio
 import { enqueueOutboundDispatches, type OutboundEvent } from "../outbound/dispatch";
 
 export type Gateway = "assiny" | "hotmart" | "hubla";
-export type PurchaseStatus = "paid" | "refunded" | "chargeback" | "refused" | "pending";
+export type PurchaseStatus =
+  | "paid"
+  | "refunded"
+  | "chargeback"
+  | "refused"
+  | "refund_requested"
+  | "pending";
 
 /**
  * Canonicaliza o tipo do evento entre gateways.
@@ -27,6 +33,7 @@ export type EventKind =
   | "purchase_refunded"
   | "purchase_chargeback"
   | "purchase_refused"
+  | "purchase_refund_requested"
   | "subscription_renewed"
   | "subscription_past_due"
   | "subscription_cancelled";
@@ -273,15 +280,29 @@ async function applyTransactionStatusChange(
 
   if (!rows || rows.length === 0) return { handled: false };
 
-  const paidRows = rows.filter((r) => r.status === "paid");
-  if (paidRows.length > 0) {
-    const ids = paidRows.map((r) => r.id as string);
+  // Ciclo de vida: paid → refund_requested → refunded/chargeback.
+  //  - solicitação (refund_requested) só sai de 'paid';
+  //  - reembolso/chargeback efetivado sai de 'paid' OU 'refund_requested'.
+  // Assim o refunded_purchase que chega DEPOIS do request_refund ainda pega a
+  // venda (que já não está mais 'paid').
+  const fromStatuses =
+    p.status === "refunded" || p.status === "chargeback"
+      ? ["paid", "refund_requested"]
+      : ["paid"];
+  const changeable = rows.filter((r) => fromStatuses.includes(r.status as string));
+
+  if (changeable.length > 0) {
+    const ids = changeable.map((r) => r.id as string);
     await hub.from("purchases").update({ status: p.status }).in("id", ids);
-    for (const r of paidRows) {
-      try {
-        await revokeGrantsForPurchase(hub, r.id as string);
-      } catch (err) {
-        console.error("[applyTransactionStatusChange] revoke failed:", err);
+    // Solicitação de reembolso é PENDENTE — mantém o acesso. Só revoga quando o
+    // reembolso/chargeback/recusa é efetivo.
+    if (p.status !== "refund_requested") {
+      for (const r of changeable) {
+        try {
+          await revokeGrantsForPurchase(hub, r.id as string);
+        } catch (err) {
+          console.error("[applyTransactionStatusChange] revoke failed:", err);
+        }
       }
     }
     await logEvent(hub, "webhook.status_changed", {
@@ -292,8 +313,8 @@ async function applyTransactionStatusChange(
         status: p.status,
         affected: ids.length,
       },
-      customerId: paidRows[0]!.customer_id as string,
-      purchaseId: paidRows[0]!.id as string,
+      customerId: changeable[0]!.customer_id as string,
+      purchaseId: changeable[0]!.id as string,
     });
   }
 
@@ -342,7 +363,8 @@ export async function recordPurchase(
   if (
     p.eventKind === "purchase_refunded" ||
     p.eventKind === "purchase_chargeback" ||
-    p.eventKind === "purchase_refused"
+    p.eventKind === "purchase_refused" ||
+    p.eventKind === "purchase_refund_requested"
   ) {
     const applied = await applyTransactionStatusChange(hub, p);
     if (applied.handled) {
@@ -379,6 +401,41 @@ export async function recordPurchase(
       },
     });
     return { skipped: true, reason: "unknown_product" };
+  }
+
+  // 2b. Guard anti-duplicata por TRANSAÇÃO + PRODUTO.
+  //
+  // A Assiny manda DOIS eventos pra mesma venda: `approved_purchase` E
+  // `completed_purchase`. Como o gateway_event_id é `${txid}_${evento}`, os dois
+  // têm ids diferentes e passam pelo dedupe do passo 1 → gravava 2 purchases pra
+  // 1 venda (dobrava o faturamento).
+  //
+  // Aqui: se já existe uma purchase da MESMA transação (mesmo txid) pro MESMO
+  // produto, é o mesmo evento com outro nome → ignora. Order bumps continuam
+  // entrando normal (mesmo txid, produto DIFERENTE = venda diferente).
+  if (p.txExternalId) {
+    const { data: sameTxRows } = await hub
+      .from("purchases")
+      .select("id, customer_id")
+      .eq("gateway", p.gateway)
+      .eq("product_id", product.id)
+      .like("gateway_event_id", `${p.txExternalId}%`)
+      .limit(1);
+    const sameTx = sameTxRows?.[0];
+    if (sameTx) {
+      await logEvent(hub, "webhook.dedupe.same_transaction", {
+        payload: {
+          gateway: p.gateway,
+          tx_id: p.txExternalId,
+          product_id: product.id,
+          gateway_event_id: p.gatewayEventId,
+          kind: p.eventKind,
+        },
+        customerId: sameTx.customer_id as string,
+        purchaseId: sameTx.id as string,
+      });
+      return { skipped: true, reason: "duplicate" };
+    }
   }
 
   // 3. Upsert customer

@@ -231,6 +231,7 @@ function statusChip(status: string) {
   if (status === "refunded") return { dot: "bg-warn", label: "Estornado" };
   if (status === "chargeback") return { dot: "bg-danger", label: "Chargeback" };
   if (status === "refused") return { dot: "bg-text2", label: "Recusado" };
+  if (status === "refund_requested") return { dot: "bg-warn", label: "Reembolso solicitado" };
   return { dot: "bg-text2", label: status };
 }
 
