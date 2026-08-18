@@ -153,11 +153,16 @@ async function listSales(filters: {
 
   if (filters.q) {
     const ql = filters.q.toLowerCase();
+    // Telefone: compara só dígitos, dos dois lados, pra casar com/sem +55,
+    // parênteses, traços e espaço. >= 4 dígitos pra não sair casando tudo.
+    const qDigits = ql.replace(/\D/g, "");
     raw = raw.filter(
       (r) =>
         r.customers?.email.toLowerCase().includes(ql) ||
         r.customers?.name?.toLowerCase().includes(ql) ||
-        r.products?.name.toLowerCase().includes(ql),
+        r.products?.name.toLowerCase().includes(ql) ||
+        (qDigits.length >= 4 &&
+          (r.customers?.phone ?? "").replace(/\D/g, "").includes(qDigits)),
     );
   }
 
@@ -226,7 +231,7 @@ export default async function Page({
             type="search"
             name="q"
             defaultValue={sp.q ?? ""}
-            placeholder="Buscar email, nome ou produto..."
+            placeholder="Buscar email, nome, telefone ou produto..."
             className="input"
           />
           <select name="gateway" defaultValue={sp.gateway ?? "all"} className="input">
