@@ -1,14 +1,20 @@
 /**
- * GET /api/admin/replay-unknown-product?q=<substr>&dry=1
+ * GET /api/admin/replay-unknown-product?q=<substr>&dry=1&limit=120
  *
- * Reprocessa webhook_executions com status='unknown_product' cujo raw_body
- * CONTÉM `q` (ex: o gateway_product_id do produto). Útil depois de corrigir o
- * match de produto (ex: apagar rascunhos duplicados do scalo): re-posta os
- * webhooks que caíram em unknown_product → agora casam → criam a compra +
- * provisionam + mandam o e-mail.
+ * Reprocessa, EM LOTES, webhook_executions status='unknown_product' cujo raw_body
+ * CONTÉM `q` (ex: o gateway_product_id). Depois de corrigir o match de produto,
+ * re-posta os webhooks → agora casam → criam a compra + provisionam + e-mail.
  *
- * dry-run por padrão (só conta/lista). Adicione &dry=0 pra reprocessar de verdade.
- * Auth via session de admin.
+ * Processa no máximo `limit` por chamada (default 120, teto 400) pra caber no
+ * timeout da Vercel (evita 504). Marca cada re-post OK como status='replayed'
+ * NA HORA — se der timeout no meio, o que já foi reprocessado não repete no
+ * próximo lote. Retorna `restantes` pra você saber quando acabou (0 = fim).
+ * Reprocessa approved E completed do mesmo sale: o 1º que rodar provisiona, o
+ * 2º cai no guard anti-duplicata (recordPurchase) e é pulado — seguro.
+ *
+ * dry-run por padrão (só conta). &dry=0 dispara. Auth via session de admin.
+ * Uso recomendado: no console do navegador (F12), com um loop de fetch em
+ * &dry=0&limit=60 até `restantes` chegar a 0 (evita colar link várias vezes).
  */
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
@@ -29,7 +35,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") ?? "").trim();
   const dry = url.searchParams.get("dry") !== "0";
-  const days = Number(url.searchParams.get("days") ?? "45");
+  const limit = Math.min(Number(url.searchParams.get("limit") ?? "120"), 400);
+  const days = Number(url.searchParams.get("days") ?? "60");
   if (!q) {
     return NextResponse.json(
       { error: "q obrigatório (substring do raw_body, ex: o gateway_product_id)" },
@@ -38,31 +45,44 @@ export async function GET(req: Request) {
   }
 
   const sb = createSupabaseAdmin();
+  const sinceISO = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  // Conta quantos ainda faltam (unknown_product casando q). Ao reprocessar com
+  // sucesso, marcamos status='replayed', então isso vai caindo até 0.
+  const remainingQuery = () =>
+    sb
+      .from("webhook_executions")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "unknown_product")
+      .in("gateway", ["assiny", "hotmart", "hubla"])
+      .ilike("raw_body", `%${q}%`)
+      .gte("created_at", sinceISO);
+
+  if (dry) {
+    const { count } = await remainingQuery();
+    return NextResponse.json({
+      ok: true,
+      dry: true,
+      q,
+      restantes: count ?? 0,
+      aviso: "Nada reprocessado. Adicione &dry=0 pra disparar (em lotes).",
+    });
+  }
+
   const { data: execs, error } = await sb
     .from("webhook_executions")
     .select("id, gateway, raw_body, raw_headers")
     .eq("status", "unknown_product")
     .in("gateway", ["assiny", "hotmart", "hubla"])
     .ilike("raw_body", `%${q}%`)
-    .gte("created_at", new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
+    .gte("created_at", sinceISO)
     .order("created_at", { ascending: true })
-    .limit(1000);
+    .limit(limit);
 
   if (error) {
     return NextResponse.json({ error: "query_failed", detail: error.message }, { status: 500 });
   }
   const list = execs ?? [];
-
-  if (dry) {
-    return NextResponse.json({
-      ok: true,
-      dry: true,
-      q,
-      days,
-      encontrados: list.length,
-      aviso: "Nada reprocessado. Adicione &dry=0 pra disparar.",
-    });
-  }
 
   const base =
     process.env.WEBHOOKS_BASE_URL ??
@@ -87,13 +107,13 @@ export async function GET(req: Request) {
       headers["content-type"] = headers["content-type"] ?? "application/json";
       headers["x-hub-replay-of"] = exec.id as string;
 
-      const res = await fetch(target, {
-        method: "POST",
-        headers,
-        body: exec.raw_body as string,
-      });
-      if (res.ok) replayed++;
-      else {
+      const res = await fetch(target, { method: "POST", headers, body: exec.raw_body as string });
+      if (res.ok) {
+        replayed++;
+        // Marca JÁ (item a item) — se der timeout no meio do lote, o que já foi
+        // reprocessado fica marcado e o próximo lote não repete.
+        await sb.from("webhook_executions").update({ status: "replayed" }).eq("id", exec.id as string);
+      } else {
         failed++;
         errors.push({ id: exec.id as string, error: `HTTP ${res.status}` });
       }
@@ -103,11 +123,13 @@ export async function GET(req: Request) {
     }
   }
 
+  const { count: restantes } = await remainingQuery();
+
   await logAudit({
     actor: auth.email,
     action: "execution.replay_unknown_product",
     target: "webhook_executions",
-    payload: { q, days, total: list.length, replayed, failed },
+    payload: { q, limit, processados: list.length, replayed, failed, restantes: restantes ?? 0 },
   });
 
   revalidatePath("/executions");
@@ -117,9 +139,10 @@ export async function GET(req: Request) {
     ok: true,
     dry: false,
     q,
-    total: list.length,
+    processados: list.length,
     replayed,
     failed,
-    errors: errors.slice(0, 20),
+    restantes: restantes ?? 0,
+    errors: errors.slice(0, 10),
   });
 }
