@@ -23,9 +23,17 @@ export function verifyHotmart(headerToken: string | null, secret: string): boole
   return safeEqual(headerToken.trim(), secret);
 }
 
-// Hubla: x-hubla-token é um token estático compartilhado (não é HMAC).
+// Hubla: x-hubla-token é um token estático GERADO pela Hubla — um por conta/webhook.
+// Como rodamos mais de uma conta Hubla ao mesmo tempo, `secret` pode conter VÁRIOS
+// tokens separados por vírgula (ou espaço/linha). O header é válido se bater com
+// QUALQUER um deles. Com um único token (sem vírgula) funciona igual a antes.
 // Doc: https://hubla.gitbook.io/docs/webhooks/proteja-seu-endpoint
 export function verifyHubla(headerToken: string | null, secret: string): boolean {
   if (!headerToken) return false;
-  return safeEqual(headerToken.trim(), secret);
+  const received = headerToken.trim();
+  const accepted = secret
+    .split(/[\s,]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  return accepted.some((t) => safeEqual(received, t));
 }
