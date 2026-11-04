@@ -1,9 +1,18 @@
 /**
- * GET /api/admin/replay-unknown-product?q=<substr>&dry=1&limit=120
+ * GET /api/admin/replay-unknown-product?q=<substr>&status=<st>&gateway=<gw>&dry=1&limit=120
  *
- * Reprocessa, EM LOTES, webhook_executions status='unknown_product' cujo raw_body
- * CONTÉM `q` (ex: o gateway_product_id). Depois de corrigir o match de produto,
- * re-posta os webhooks → agora casam → criam a compra + provisionam + e-mail.
+ * Reprocessa, EM LOTES, webhook_executions re-postando o raw_body + raw_headers
+ * originais pro app de webhooks → agora que a causa foi corrigida (match de
+ * produto OU token de auth), eles casam/autenticam → criam a compra + provisionam
+ * + e-mail.
+ *
+ * Filtros:
+ *   - status  (default 'unknown_product'): qual falha reprocessar. Allowlist:
+ *             unknown_product (match de produto corrigido) | rejected_auth (401 por
+ *             token — corrigido o env, o x-hubla-token guardado volta a valer).
+ *   - q       substring do raw_body (ex: o gateway_product_id). Opcional se passar
+ *             gateway; obrigatório caso contrário (nunca reprocessa tudo sem escopo).
+ *   - gateway (opcional) assiny | hotmart | hubla — escopa a um gateway só.
  *
  * Processa no máximo `limit` por chamada (default 120, teto 400) pra caber no
  * timeout da Vercel (evita 504). Marca cada re-post OK como status='replayed'
@@ -32,50 +41,75 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "no_access" }, { status: 403 });
   }
 
+  const ALLOWED_STATUS = ["unknown_product", "rejected_auth"];
+  const ALLOWED_GATEWAY = ["assiny", "hotmart", "hubla"];
+
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") ?? "").trim();
+  const status = (url.searchParams.get("status") ?? "unknown_product").trim();
+  const gateway = (url.searchParams.get("gateway") ?? "").trim().toLowerCase();
   const dry = url.searchParams.get("dry") !== "0";
   const limit = Math.min(Number(url.searchParams.get("limit") ?? "120"), 400);
   const days = Number(url.searchParams.get("days") ?? "60");
-  if (!q) {
+
+  if (!ALLOWED_STATUS.includes(status)) {
     return NextResponse.json(
-      { error: "q obrigatório (substring do raw_body, ex: o gateway_product_id)" },
+      { error: `status inválido. Use um de: ${ALLOWED_STATUS.join(", ")}` },
+      { status: 400 },
+    );
+  }
+  if (gateway && !ALLOWED_GATEWAY.includes(gateway)) {
+    return NextResponse.json(
+      { error: `gateway inválido. Use um de: ${ALLOWED_GATEWAY.join(", ")}` },
+      { status: 400 },
+    );
+  }
+  // Exige escopo: ou q ou gateway. Nunca reprocessa a tabela inteira sem filtro.
+  if (!q && !gateway) {
+    return NextResponse.json(
+      { error: "informe q (substring do raw_body, ex: gateway_product_id) e/ou gateway" },
       { status: 400 },
     );
   }
 
   const sb = createSupabaseAdmin();
   const sinceISO = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const gateways = gateway ? [gateway] : ALLOWED_GATEWAY;
 
-  // Conta quantos ainda faltam (unknown_product casando q). Ao reprocessar com
-  // sucesso, marcamos status='replayed', então isso vai caindo até 0.
-  const remainingQuery = () =>
-    sb
+  // Conta quantos ainda faltam (status alvo casando os filtros). Ao reprocessar
+  // com sucesso, marcamos status='replayed', então isso vai caindo até 0.
+  const remainingQuery = () => {
+    let query = sb
       .from("webhook_executions")
       .select("id", { count: "exact", head: true })
-      .eq("status", "unknown_product")
-      .in("gateway", ["assiny", "hotmart", "hubla"])
-      .ilike("raw_body", `%${q}%`)
+      .eq("status", status)
+      .in("gateway", gateways)
       .gte("created_at", sinceISO);
+    if (q) query = query.ilike("raw_body", `%${q}%`);
+    return query;
+  };
 
   if (dry) {
     const { count } = await remainingQuery();
     return NextResponse.json({
       ok: true,
       dry: true,
-      q,
+      status,
+      gateway: gateway || "(todos)",
+      q: q || "(sem filtro de raw_body)",
       restantes: count ?? 0,
       aviso: "Nada reprocessado. Adicione &dry=0 pra disparar (em lotes).",
     });
   }
 
-  const { data: execs, error } = await sb
+  let execsQuery = sb
     .from("webhook_executions")
     .select("id, gateway, raw_body, raw_headers")
-    .eq("status", "unknown_product")
-    .in("gateway", ["assiny", "hotmart", "hubla"])
-    .ilike("raw_body", `%${q}%`)
-    .gte("created_at", sinceISO)
+    .eq("status", status)
+    .in("gateway", gateways)
+    .gte("created_at", sinceISO);
+  if (q) execsQuery = execsQuery.ilike("raw_body", `%${q}%`);
+  const { data: execs, error } = await execsQuery
     .order("created_at", { ascending: true })
     .limit(limit);
 
@@ -129,7 +163,7 @@ export async function GET(req: Request) {
     actor: auth.email,
     action: "execution.replay_unknown_product",
     target: "webhook_executions",
-    payload: { q, limit, processados: list.length, replayed, failed, restantes: restantes ?? 0 },
+    payload: { status, gateway: gateway || null, q, limit, processados: list.length, replayed, failed, restantes: restantes ?? 0 },
   });
 
   revalidatePath("/executions");
@@ -138,7 +172,9 @@ export async function GET(req: Request) {
   return NextResponse.json({
     ok: true,
     dry: false,
-    q,
+    status,
+    gateway: gateway || "(todos)",
+    q: q || "(sem filtro de raw_body)",
     processados: list.length,
     replayed,
     failed,
