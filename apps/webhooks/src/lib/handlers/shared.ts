@@ -117,30 +117,50 @@ export interface NormalizedLostPurchase {
 
 type FoundProduct = { id: string; pendingConfig: boolean };
 
+/**
+ * Casa produtos cujo gateway_ids[gateway] bate com `gatewayProductId`. O valor
+ * pode ser STRING (1 id) ou ARRAY de ids — suportamos array porque o MESMO
+ * produto pode ser vendido em VÁRIAS contas do mesmo gateway (ex: 2 contas
+ * Hubla), cada uma com seu id próprio. Filtramos no banco os produtos que têm a
+ * chave do gateway preenchida e casamos o id em JS (PostgREST não casa "string
+ * OU item de array" num filtro só com segurança pra input externo). Ordena
+ * CONFIGURADO (pending_config=false) primeiro — evita casar num rascunho quando
+ * existe o produto real.
+ */
+async function matchProductsByGatewayId(
+  hub: SupabaseClient,
+  gateway: string,
+  gatewayProductId: string,
+): Promise<Array<{ id: string; pending_config: boolean }>> {
+  const { data, error } = await hub
+    .from("products")
+    .select("id, pending_config, gateway_ids")
+    .not("gateway_ids->>" + gateway, "is", null)
+    .order("pending_config", { ascending: true });
+  if (error) {
+    console.error("[matchProductsByGatewayId]", error);
+    return [];
+  }
+  return (data ?? [])
+    .filter((row) => {
+      const val = (row.gateway_ids as Record<string, unknown> | null)?.[gateway];
+      if (Array.isArray(val)) return val.some((v) => String(v) === gatewayProductId);
+      return val === gatewayProductId;
+    })
+    .map((row) => ({ id: row.id as string, pending_config: Boolean(row.pending_config) }));
+}
+
 async function findProductByGatewayId(
   hub: SupabaseClient,
   gateway: Gateway,
   gatewayProductId: string,
 ): Promise<FoundProduct | null> {
-  // NÃO usar .maybeSingle(): ele ERRA quando há mais de um produto com o mesmo
-  // gateway_id (ex: rascunhos duplicados). Nesse caso retornava null → o
-  // recordPurchase criava OUTRO rascunho → bola de neve de drafts idênticos e o
-  // produto real nunca casava. Aqui pegamos os matches e preferimos o
-  // CONFIGURADO (pending_config=false vem primeiro).
-  const { data, error } = await hub
-    .from("products")
-    .select("id, pending_config")
-    .filter("gateway_ids->>" + gateway, "eq", gatewayProductId)
-    .order("pending_config", { ascending: true })
-    .limit(1);
-  if (error) {
-    console.error("[findProductByGatewayId]", error);
-    return null;
-  }
-  const row = data?.[0];
-  return row
-    ? { id: row.id as string, pendingConfig: Boolean(row.pending_config) }
-    : null;
+  // Pega o CONFIGURADO primeiro (matchProductsByGatewayId ordena pending_config
+  // asc). NÃO usar .maybeSingle() no matching: erra quando há >1 produto com o
+  // mesmo id (ex: rascunhos duplicados) → retornava null → recordPurchase criava
+  // OUTRO rascunho → bola de neve de drafts.
+  const row = (await matchProductsByGatewayId(hub, gateway, gatewayProductId))[0];
+  return row ? { id: row.id, pendingConfig: row.pending_config } : null;
 }
 
 /**
@@ -155,12 +175,8 @@ async function createDraftProduct(
 ): Promise<void> {
   // Guard anti-duplicata: se JÁ existe produto (rascunho ou configurado) com esse
   // gateway_id, não cria outro — senão vira bola de neve de rascunhos idênticos.
-  const { data: existing } = await hub
-    .from("products")
-    .select("id")
-    .filter("gateway_ids->>" + gateway, "eq", gatewayProductId)
-    .limit(1);
-  if (existing && existing.length > 0) return;
+  const existing = await matchProductsByGatewayId(hub, gateway, gatewayProductId);
+  if (existing.length > 0) return;
 
   const name = nameHint?.trim() || `[draft] ${gateway} ${gatewayProductId}`;
   const { error } = await hub.from("products").insert({
@@ -772,12 +788,8 @@ export async function recordLostPurchase(
   // 4. Resolve product_id se já existir cadastrado (não cria draft)
   let productId: string | null = null;
   if (lp.productGatewayId) {
-    const { data } = await hub
-      .from("products")
-      .select("id")
-      .filter("gateway_ids->>" + lp.platform, "eq", lp.productGatewayId)
-      .maybeSingle();
-    if (data) productId = data.id as string;
+    const match = (await matchProductsByGatewayId(hub, lp.platform, lp.productGatewayId))[0];
+    if (match) productId = match.id;
   }
 
   // 5. Insere. Tenta com pix_qr_code primeiro (nome novo, pós migration 0032).

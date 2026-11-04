@@ -12,7 +12,7 @@ interface ProductRow {
   id: string;
   name: string;
   billing_type: string;
-  gateway_ids: Record<string, string> | null;
+  gateway_ids: Record<string, string | string[]> | null;
   requires_app_access: boolean;
   pending_config: boolean;
   role: ProductRole;
@@ -62,6 +62,20 @@ function presetLabel(e: EntitlementRow): string {
   return DURATION_PRESETS.find((p) => p.value === preset)?.label ?? "—";
 }
 
+// gateway_ids pode ter STRING (1 id) ou ARRAY (vários ids — ex: 2 contas Hubla
+// vendendo o mesmo produto). Exibe como "id1, id2" no input e parseia de volta:
+// 0 ids → "", 1 → string, 2+ → array.
+function gwText(v: string | string[] | undefined | null): string {
+  if (Array.isArray(v)) return v.join(", ");
+  return v ?? "";
+}
+function parseGatewayIds(raw: string): string | string[] {
+  const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0]!;
+  return parts;
+}
+
 // ────────────────────────────────────────────────────────
 // Server actions
 // ────────────────────────────────────────────────────────
@@ -80,9 +94,9 @@ async function updateProduct(formData: FormData) {
       requires_app_access: formData.get("requires_app_access") === "on",
       role: validRole,
       gateway_ids: {
-        assiny: String(formData.get("assiny_id") ?? "").trim(),
-        hotmart: String(formData.get("hotmart_id") ?? "").trim(),
-        hubla: String(formData.get("hubla_id") ?? "").trim(),
+        assiny: parseGatewayIds(String(formData.get("assiny_id") ?? "")),
+        hotmart: parseGatewayIds(String(formData.get("hotmart_id") ?? "")),
+        hubla: parseGatewayIds(String(formData.get("hubla_id") ?? "")),
       },
     })
     .eq("id", id);
@@ -241,22 +255,22 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
             <Field
               name="assiny_id"
               label="ID do produto no Assiny"
-              defaultValue={p.gateway_ids?.assiny ?? ""}
-              placeholder="ex: prod_abc123"
+              defaultValue={gwText(p.gateway_ids?.assiny)}
+              placeholder="ex: prod_abc123 (vírgula p/ vários)"
               mono
             />
             <Field
               name="hotmart_id"
               label="ID do produto no Hotmart"
-              defaultValue={p.gateway_ids?.hotmart ?? ""}
-              placeholder="ex: 999888"
+              defaultValue={gwText(p.gateway_ids?.hotmart)}
+              placeholder="ex: 999888 (vírgula p/ vários)"
               mono
             />
             <Field
               name="hubla_id"
               label="ID do produto na Hubla"
-              defaultValue={p.gateway_ids?.hubla ?? ""}
-              placeholder="ex: inAVzweR0QYw5y03K5mq"
+              defaultValue={gwText(p.gateway_ids?.hubla)}
+              placeholder="ex: id1, id2 (vírgula p/ várias contas)"
               mono
             />
             <label className="flex items-center gap-2.5 text-sm md:col-span-2">
